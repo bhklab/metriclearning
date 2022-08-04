@@ -1,7 +1,11 @@
 
+
+# mat - assumed to be features x samples (I think)
+# classes - vector of length ncol(mat)
+# wts - vector of length nrow(mat)
 update_step <- function(mat, classes, wts, m, v, tparam, b1=0.9, b2=0.999){
   
-  eta <- 0.01
+  eta <- 0.001
   mt <- numeric(length(m))
   vt <- numeric(length(v))
   wt <- numeric(length(wts))
@@ -115,3 +119,21 @@ embedspace <- function(ds, rotmat, wts){
     return(sqrt(wts) * (t(rotmat) %*% ds@mat))
   }
 }
+
+
+rank_vectors <- function(a,b){
+  if (length(b) == 0){
+    return(numeric(length(a)))
+  }
+  
+  # Given two input vectors a and b, returns for each element a_i of a: how many elements of b are less than or equal to a_i
+  myvals <- data.frame(val=sort(a), ix=order(a))
+  myvals <- rbind(myvals, data.frame(val=sort(b), ix=0))
+  myvals <- myvals[order(myvals$val, myvals$ix), ]
+  myvals$count <- cumsum(myvals$ix == 0)
+  
+  arank <- numeric(length(a))
+  arank[myvals$ix[myvals$ix > 0]] <- myvals$count[myvals$ix > 0]
+  return(arank)
+}
+

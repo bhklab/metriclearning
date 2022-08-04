@@ -52,17 +52,27 @@ test_innerprod <- function(datapath, metapath, cell_id="HEPG2", pcdim=978, epoch
 
 
 
-train_metric <- function(mymat, classes, epochlim=1000){
-  dim1 <- dim(mymat)[1]
-  cpcount <- table(classes)
-  mycmpds <- names(cpcount)[which(cpcount >= 12)]
+
+# Train_metric 
+#   mymat - samples x features
+#   classes - vector of length samples, 
+train_metric <- function(mymat, classes, epochlim=1000, runPCA=TRUE){
+  if(runPCA){
+    pcspace <- prcomp(mymat, scale=FALSE, center=FALSE)
+    oldmat <- mymat
+    mymat <- pcspace$x
+  }
   
-  wts <- numeric(dim1)+1
-  m <- numeric(dim1)
-  v <- numeric(dim1)
+  dim2 <- dim(mymat)[2]
+  cpcount <- table(classes)
+  mycmpds <- names(cpcount)[which(cpcount >= 3)]
+  
+  wts <- numeric(dim2)+1
+  m <- numeric(dim2)
+  v <- numeric(dim2)
   epoch <- 1
   
-  wmat <- matrix(numeric(epochlim*dim1), ncol=dim1)
+  wmat <- matrix(numeric(epochlim*dim2), ncol=dim2)
 
   while (epoch <= epochlim){
     if (epoch %% 25 == 0){
@@ -71,9 +81,9 @@ train_metric <- function(mymat, classes, epochlim=1000){
     mycp <- sample(mycmpds, 1)
     
     ix <- which(classes == mycp)
-    jx <- sample(setdiff(seq_len(dim(mymat)[2]), ix), 2*length(ix))
+    jx <- sample(setdiff(seq_len(dim(mymat)[1]), ix), 2*length(ix))
     
-    amat <- cbind(mymat[,ix], mymat[,jx])
+    amat <- cbind(t(mymat[ix,]), t(mymat[jx,]))
     myclass <- c(rep(1, length(ix)), rep(0, length(jx)))
     
     retvals <- update_step(amat, myclass, wts, m, v, epoch)
@@ -86,16 +96,21 @@ train_metric <- function(mymat, classes, epochlim=1000){
   }
   
   wmat[wmat < 0] <- 0
-  return(list(wmat=wmat))
+  if (runPCA){
+    return(list(wmat=wmat, pcspace=pcspace))
+  } else {
+    return(list(wmat=wmat))
+  }
   
 }
 
 
+# mymat - features x samples
 eval_func <- function(mymat, classes, rotmat, weights, mkfigs=1, outdir=".", name="myfunccompare"){
-  mysimmat0 <- cosine(mymat, mymat)
+  mysimmat0 <- CMAPToolkit::cosine(mymat, mymat)
   
   #mysimmat <- cosine(sqrt(weights)*mymat, sqrt(weights)*mymat)
-  mysimmat <- calc_simmat(ds1, ds2, rotmat, wts)
+  mysimmat <- calc_simmat(mymat, mymat, rotmat, weights)
 
   
   print("Similarity matrices computed")
@@ -133,34 +148,55 @@ eval_func <- function(mymat, classes, rotmat, weights, mkfigs=1, outdir=".", nam
   simres$z0 <- (simres$sim0 - mean0)/sd0
   simres$z1 <- (simres$sim1 - mean1)/sd1
   
+  simres$q0 <- p.adjust(simres$rank0, method="fdr")
+  simres$q1 <- p.adjust(simres$rank1, method="fdr")
+  
   if (mkfigs){
-    pdf(file.path(outdir, sprintf("%s_base_sim_density.pdf", name)), width=10, height=8)
+    pdf(file.path(outdir, sprintf("%s_base_sim_density.pdf", name)), width=8, height=6)
     plot(density(sample(mysimmat0, 1e6), bw=0.01), col="blue", lwd=2, xlab="Cosine Similarity", ylab="Density, bw=0.01", main=sprintf("Base Similarity for %s", name), xlim=c(-1,1))
     lines(density(simres$sim0, bw=0.01), col="red", lwd=2)
-    legend(x="topleft", legend=c("All signatures", "Duplicates"), col=c("blue", "red"), lwd=c(3,3))
+    legend(x="topleft", legend=c("All signatures", "Replicates"), col=c("blue", "red"), lwd=c(3,3))
     dev.off()
     
-    pdf(file.path(outdir, sprintf("%s_mod_sim_density.pdf", name)), width=10, height=8)
-    plot(density(sample(mysimmat, 1e6), bw=0.01), col="blue", lwd=2, xlab="Cosine Similarity", ylab="Density, bw=0.01", main=sprintf("Modified Similarity for %s", name), xlim=c(-1,1))
+    pdf(file.path(outdir, sprintf("%s_base_sim_density2.pdf", name)), width=8, height=6)
+    plot(density(simres$sim0, bw=0.01), col="red", lwd=2, xlab="Cosine Similarity", ylab="Density, bw=0.01", main=sprintf("Base Similarity for %s", name), xlim=c(-1,1))
+    lines(density(sample(mysimmat0, 1e6), bw=0.01), col="blue", lwd=2)
+    legend(x="topleft", legend=c("All signatures", "Replicates"), col=c("blue", "red"), lwd=c(3,3))
+    dev.off()
+    
+    pdf(file.path(outdir, sprintf("%s_mod_sim_density.pdf", name)), width=8, height=6)
+    plot(density(sample(mysimmat, 1e6), bw=0.01), col="blue", lwd=2, xlab="Rectified Cosine Similarity", ylab="Density, bw=0.01", main=sprintf("Modified Similarity for %s", name), xlim=c(-1,1))
     lines(density(simres$sim1, bw=0.01), col="red", lwd=2)
-    legend(x="topleft", legend=c("All signatures", "Duplicates"), col=c("blue", "red"), lwd=c(3,3))
+    legend(x="topleft", legend=c("All signatures", "Replicates"), col=c("blue", "red"), lwd=c(3,3))
     dev.off()
     
-    pdf(file.path(outdir, sprintf("%s_comparison_hexplot.pdf", name)), width=10, height=8)
+    pdf(file.path(outdir, sprintf("%s_mod_sim_density2.pdf", name)), width=8, height=6)
+    plot(density(simres$sim1, bw=0.01), col="blue", lwd=2, xlab="Rectified Cosine Similarity", ylab="Density, bw=0.01", main=sprintf("Modified Similarity for %s", name), xlim=c(-1,1))
+    lines(density(sample(mysimmat, 1e6), bw=0.01), col="red", lwd=2)
+    legend(x="topleft", legend=c("All signatures", "Replicates"), col=c("blue", "red"), lwd=c(3,3))
+    dev.off()
+    
+    pdf(file.path(outdir, sprintf("%s_comparison_hexplot.pdf", name)), width=8, height=6)
     print(ggplot(simres, aes(x=z0, y=z1)) + stat_binhex(bins=100) + geom_abline(intercept=0, slope=1, color="red", linetype="dashed", size=1.5) + xlab("Base replicate similarity") + 
       ylab("Modified replicate similarity") + ggtitle(sprintf("Comparison of z-scored replicate similarities for %s", name)) + theme_minimal() + xlim(c(-1,1)))
     dev.off()
     
-    pdf(file.path(outdir, sprintf("%s_snr_comparison.pdf", name)), width=10, height=8)
+    pdf(file.path(outdir, sprintf("%s_snr_comparison.pdf", name)), width=8, height=6)
     plot(ecdf(simres$z0), col="blue", lwd=2, xlab="SNR Z-scores", ylab="Cumulative Fraction", main=sprintf("CDF of replicate similarity Z-scores, %s", name))
     lines(ecdf(simres$z1), col="red", lwd=2)
-    legend(x="topleft", legend=c("All signatures", "Duplicates"), col=c("blue", "red"), lwd=c(3,3))
+    legend(x="topleft", legend=c("Cosine similarity", "Rectified cosine"), col=c("blue", "red"), lwd=c(3,3))
     dev.off()
     
-    pdf(file.path(outdir, sprintf("%s_rank_comparison.pdf", name)), width=10, height=8)
+    pdf(file.path(outdir, sprintf("%s_rank_comparison.pdf", name)), width=8, height=6)
     plot(ecdf(simres$rank0), col="blue", lwd=2, xlab="Replicate rank", ylab="Cumulative fraction", main=sprintf("CDF of replicate rank, %s", name))
     lines(ecdf(simres$rank1), col="red", lwd=2)
-    legend(x="topleft", legend=c("All signatures", "Duplicates"), col=c("blue", "red"), lwd=c(3,3))
+    legend(x="topleft", legend=c("Cosine similarity", "Rectified cosine"), col=c("blue", "red"), lwd=c(3,3))
+    dev.off()
+    
+    pdf(file.path(outdir, sprintf("%s_rank_comparison_inset.pdf", name)), width=8, height=6)
+    plot(ecdf(simres$rank0), col="blue", lwd=2, xlab="Replicate rank", ylab="Cumulative fraction", main=sprintf("CDF of replicate rank, %s", name), xlim=c(0,0.2))
+    lines(ecdf(simres$rank1), col="red", lwd=2)
+    legend(x="topleft", legend=c("Cosine similarity", "Rectified cosine"), col=c("blue", "red"), lwd=c(3,3))
     dev.off()
     
     saveRDS(simres, file=file.path(outdir, sprintf("%s_simres.rds", name)))
@@ -168,3 +204,6 @@ eval_func <- function(mymat, classes, rotmat, weights, mkfigs=1, outdir=".", nam
   
   return(simres)
 }
+
+
+accum_pairwise_classes <- function(func1, func2) {}

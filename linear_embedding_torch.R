@@ -5,8 +5,6 @@ library(parallel)
 library(coop)
 
 library(torch)
-metapath <- "~/Data/L1000/"
-datapath <- metapath
 
 l1k_dataset <- dataset(
   
@@ -55,21 +53,51 @@ l1k_dataset <- dataset(
 )
 
 
+genDataset <- dataset(
+  name = "Generic DS",
+  
+  initialize = function(mymat, identVec, pca_first, scale=FALSE, center=FALSE) {
+    # mymat has signatures as rows, features as columns
+    if(pca_first){
+      pcspace <- prcomp(mymat, scale=scale, center=center)
+      self$sigs <- torch_tensor(pcspace$x)
+    } else {
+      self$sigs <- torch_tensor(mymat)
+    }
+    
+    cpcount <- table(identVec)
+    self$mycmpds <- names(cpcount)[which(cpcount >= 3)]
+    self$ndim <- dim(mymat)[2]
+  },
+  
+  .getitem = function(i) {
+    mycp <- self$mycmpds[[i]]
+    
+    ix <- which(self$mysigs$pert_iname == mycp)
+    jx <- sample(setdiff(seq_len(dim(self$sigs)[1]), ix), 2*length(ix))
+    
+    mymat <- torch_cat(list(self$sigs[ix, 1:self$ndim], self$sigs[jx, 1:self$ndim]))
+    myclass <- torch_tensor(c(rep(1, length(ix)), rep(0, length(jx))))
+    
+    list(x = mymat, y = myclass)
+  },
+  
+  .length = function() {
+    length(self$mycmpds)
+  }
+)
+
 
 torch_manual_seed(42)
 
 OneLayerLinear <- nn_module(
   
   "linear_embedding",
-  
   initialize = function(embedding_dim) {
-    
     self$fc1 <- nn_linear(in_features = 978, out_features = embedding_dim, bias=FALSE)
-
   },
   
   forward = function(x) {
-    
     x %>% self$fc1() 
   }
 )
@@ -79,14 +107,11 @@ OneLayerLinear <- nn_module(
 DiagonalOnly <- nn_module(
   
   "Just scaling PCs",
-  
   initialize = function(num_PCs) {
-    
     self$w <- nn_parameter(torch_ones(num_PCs, requires_grad=TRUE))
   },
   
   forward = function(x) {
-    
     torch_matmul(x,torch_diag(torch_sqrt(self$w))) 
   }
 )
@@ -137,7 +162,6 @@ train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, 
     model$train()
     train_losses <- c()  
 
-
     coro::loop(for (b in train_dl) {
       optimizer$zero_grad()
 
@@ -155,12 +179,13 @@ train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, 
       # train_losses <- c(train_losses, loss$item())
     })
     if(!is.na(save_pars)){
+      # What?!  I have no idea what this does. 
       par_list[[epoch]] <- lapply(save_pars, function(par) return(as.array(model[[par]]$cpu())))
     }
     model$eval()
     valid_losses <- c()
 
-    coro::loop(for (b in tune_dl) {
+    coro::loop(for (b in valid_dl) {
       output <- model(b$x$to(device = device))
 
       loss <- myloss(output$reshape(c(-1, 978)),b$y$to(device = device)$reshape(c(-1)))
