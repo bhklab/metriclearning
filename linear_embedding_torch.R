@@ -29,7 +29,6 @@ l1k_dataset <- dataset(
   	cpcount <- table(self$mysigs$pert_iname)
   	self$mycmpds <- names(cpcount)[which(cpcount >= 12)]
   	self$ndim <- ndim
-   
   },
   
   .getitem = function(i) {
@@ -68,12 +67,13 @@ genDataset <- dataset(
     cpcount <- table(identVec)
     self$mycmpds <- names(cpcount)[which(cpcount >= 3)]
     self$ndim <- dim(mymat)[2]
+    self$identVec <- identVec
   },
   
   .getitem = function(i) {
     mycp <- self$mycmpds[[i]]
     
-    ix <- which(self$mysigs$pert_iname == mycp)
+    ix <- which(self$identVec == mycp)
     jx <- sample(setdiff(seq_len(dim(self$sigs)[1]), ix), 2*length(ix))
     
     mymat <- torch_cat(list(self$sigs[ix, 1:self$ndim], self$sigs[jx, 1:self$ndim]))
@@ -93,8 +93,8 @@ torch_manual_seed(42)
 OneLayerLinear <- nn_module(
   
   "linear_embedding",
-  initialize = function(embedding_dim) {
-    self$fc1 <- nn_linear(in_features = 978, out_features = embedding_dim, bias=FALSE)
+  initialize = function(embedding_dim, nfeats=978) {
+    self$fc1 <- nn_linear(in_features = nfeats, out_features = embedding_dim, bias=FALSE)
   },
   
   forward = function(x) {
@@ -121,8 +121,8 @@ DiagonalOnly <- nn_module(
 
 mycos_sim_loss <- function(x, y){
 
-	sim_mat <- torch_triu(torch_cosine_similarity(x$reshape(c(-1, 1, 978)), 
-    								  x$reshape(c(1, -1, 978)), dim=3), diagonal=1)
+	sim_mat <- torch_triu(torch_cosine_similarity(x$reshape(c(-1, 1, dim(x)[2])), 
+    								  x$reshape(c(1, -1, dim(x))), dim=3), diagonal=1)
 
 	target <- torch_outer(y,y)
 
@@ -134,8 +134,8 @@ mycos_sim_loss <- function(x, y){
 
 mycos_t_loss <- function(x, y){
 
-  sim_mat <- torch_cosine_similarity(x$reshape(c(-1, 1, 978)), 
-                      x$reshape(c(1, -1, 978)), dim=3)
+  sim_mat <- torch_cosine_similarity(x$reshape(c(-1, 1, dim(x)[2])), 
+                      x$reshape(c(1, -1, dim(x)[2])), dim=3)
 
   target <- torch_outer(y,y)
 
@@ -167,9 +167,10 @@ train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, 
 
       output <- model(b$x$to(device = device))
 
-      loss <- myloss(output$reshape(c(-1, 978)),b$y$to(device = device)$reshape(c(-1)))
-      if(is.nan(loss$item()))
+      loss <- myloss(output$reshape(c(-1, output$shape[3])),b$y$to(device = device)$reshape(c(-1)))
+      if(is.nan(loss$item())){
         browser()
+      }
       loss$backward()
       optimizer$step()
       train_losses <- c(train_losses, loss$item())
@@ -188,7 +189,7 @@ train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, 
     coro::loop(for (b in valid_dl) {
       output <- model(b$x$to(device = device))
 
-      loss <- myloss(output$reshape(c(-1, 978)),b$y$to(device = device)$reshape(c(-1)))
+      loss <- myloss(output$reshape(c(-1, output$shape[3])),b$y$to(device = device)$reshape(c(-1)))
       valid_losses <- c(valid_losses, loss$item())
     })
 
