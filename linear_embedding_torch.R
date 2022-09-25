@@ -93,7 +93,7 @@ torch_manual_seed(42)
 OneLayerLinear <- nn_module(
   
   "linear_embedding",
-  initialize = function(embedding_dim, nfeats=978) {
+  initialize = function(embedding_dim, nfeats) {
     self$fc1 <- nn_linear(in_features = nfeats, out_features = embedding_dim, bias=FALSE)
   },
   
