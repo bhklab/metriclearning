@@ -41,7 +41,7 @@ metricCrossValidate <- function(mat1, classes, nFolds=5, metric="", epochs=100){
 #' @param metric Character, denotes which type of metric to learn. One of {}.
 #' @param epochs Numeric, the number of epochs of training to run (default = 100)
 
-learnInnerProduct <- function(mat1, classes, metric="", epochs=100){
+learnInnerProduct <- function(mat1, classes, metric="", epochs=100, loss=mycos_t_loss){
   gends <- genDataset(mat1, classes, pca_first = FALSE, scale = FALSE, center = FALSE)
   
   train_dl <- dataloader(gends, batch_size = 1, shuffle = TRUE)
@@ -56,7 +56,7 @@ learnInnerProduct <- function(mat1, classes, metric="", epochs=100){
   res <- train_function(model=model, 
                         train_dl=train_dl, 
                         valid_dl=train_dl, 
-                        myloss=mycos_t_loss, 
+                        myloss=loss, 
                         device=device, 
                         optimizer=optimizer, 
                         epochs = epochs, 
@@ -77,6 +77,10 @@ learnInnerProduct <- function(mat1, classes, metric="", epochs=100){
 #' @return matrix
 #' @export
 innerProduct <- function(model, mat1, mat2){
+  
+  if (model == "cosine"){
+    return(cosine(mat1, mat2))
+  }
   # Check for integrity of variables?
   m1 <- model(torch_tensor(mat1, dtype=torch_float()))
   m2 <- model(torch_tensor(mat2, dtype=torch_float()))

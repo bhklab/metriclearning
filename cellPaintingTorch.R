@@ -128,6 +128,8 @@ lines(density(unlist(ipgrps_comp$same), bw=0.01), col="red")
 ipgrps_test <- innerProductGroups(lip$model, combDataNorm[ixTest2, 1:100], combMeta$Metadata_pert_id[ixTest2])
 ipgrps_test2 <- innerProductGroups(lip$model, combDataNorm[ixTest, 1:100], combMeta$Metadata_pert_id[ixTest], compact=1)
 
+cosgrps_test <- innerProductGroups(model="cosine", combDataNorm[ixTest2, 1:100], combMeta$Metadata_pert_id[ixTest2])
+
 
 plot(density(ipgrps_test$diff, bw=0.01), col="blue", xlim=c(-1,1))
 lines(density(unlist(ipgrps_test$same), bw=0.01), col="red")
