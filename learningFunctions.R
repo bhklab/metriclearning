@@ -15,14 +15,16 @@ metricCrossValidate <- function(mat1, classes, nFolds=5, metric="", epochs=100){
   myfolds <- createFolds(names(mygroups), k=nFolds)
   #myfolds0 <- createFolds(names(mygroups)[mygroups == 1], k=nFolds)
   
-  res_all <- c()
+  res_all <- list(myfolds=myfolds)
   
   for (testset in myfolds){
     testix <- which(classes %in% testset)
     trainix <- setdiff(seq_along(classes), testix)
     
     res <- learnInnerProduct(mat1[trainix, ], classes[trainix], metric=metric, epochs=epochs)  
-    res_all <- c(res_all, res)
+    
+    
+    res_all[sprintf("fold%d", length(res_all))] <- list(res)
   }
   
   return(res_all)
@@ -57,12 +59,12 @@ learnInnerProduct <- function(mat1, classes, metric="", epochs=100){
                         myloss=mycos_t_loss, 
                         device=device, 
                         optimizer=optimizer, 
-                        epochs = 100, 
+                        epochs = epochs, 
                         #save_pars = "w"
                         )
   
   # Return training loss?
-  return(model=model, res=res)
+  return(list(model=model, res=res))
 }
 
 
@@ -76,10 +78,10 @@ learnInnerProduct <- function(mat1, classes, metric="", epochs=100){
 #' @export
 innerProduct <- function(model, mat1, mat2){
   # Check for integrity of variables?
-  m1 <- model(mat1)
-  m2 <- model(mat2)
+  m1 <- model(torch_tensor(mat1, dtype=torch_float()))
+  m2 <- model(torch_tensor(mat2, dtype=torch_float()))
   
-  return(cosine(m1, m2))
+  return(cosine(as.matrix(m1), as.matrix(m2)))
 }
 
 
@@ -103,8 +105,45 @@ cosine <- function(mat1, mat2){
 
 
 
-innerProductGroups <- function(model, mat1, groupings){
-  sims <- innerProduct(model, mat1, mat1)
-  
-  # Finish this
+innerProductGroups <- function(model, mat1, groupings, compact=0){
+  if (compact){
+    # Use compact if the matrix is too large to effectively compute
+    # Compact samples from the space of unlike similarities rather than computing the entire matrix
+    
+    # This could likely be accomplished more elegantly with dplyr
+    samesim <- sapply(names(table(groupings)[table(groupings)>1]), FUN=function(x){
+      ix <- which(groupings == x)
+      a <- innerProduct(model, mat1[ix, ], mat1[ix, ])
+      a[upper.tri(a)]
+    })
+    
+    jx <- sample(dim(mat1)[1], 1000)
+    diffsim <- innerProduct(model, mat1[jx, ], mat1[jx, ])
+    for (mygrp in names(table(groupings)[table(groupings) > 1])){
+      ix <- which(jx %in% which(groupings == mygrp))
+      if (length(ix) > 1){
+        diffsim[ix, ix] <- NA
+      }
+    }
+    diffsim <- diffsim[upper.tri(diffsim)]
+    diffsim <- diffsim[!is.na(diffsim)]
+    return(list(same=samesim, diff=diffsim))
+    
+  } else {
+    sims <- innerProduct(model, mat1, mat1)
+
+    samesim <- sapply(names(table(groupings)[table(groupings) > 1]), FUN=function(x) {
+      a <- sims[which(groupings == x), which(groupings == x)]
+      a[upper.tri(a)]
+      })
+    
+    diffsim <- sims
+    for (mygroup in groupings){
+      ix <- which(groupings == mygroup)
+      diffsim[ix,ix] <- NA
+    }
+    
+    diffsim <- diffsim[!is.na(diffsim)]
+    return(list(same=samesim, diff=diffsim))
+  }
 }

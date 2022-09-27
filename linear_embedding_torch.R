@@ -3,7 +3,6 @@ library(CMAPToolkit)
 library(ggplot2)
 library(parallel)
 library(coop)
-
 library(torch)
 
 l1k_dataset <- dataset(
@@ -157,6 +156,10 @@ mycos_t_loss <- function(x, y){
 
 train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, optimizer, save_pars=NA){
   par_list = list()
+  
+  mean_train_losses <- c()
+  mean_valid_losses <- c()
+  
   for (epoch in seq_len(epochs)) {
 
     model$train()
@@ -193,9 +196,12 @@ train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, 
       valid_losses <- c(valid_losses, loss$item())
     })
 
+    mean_train_losses <- c(mean_train_losses, mean(train_losses))
+    mean_valid_losses <- c(mean_valid_losses, mean(valid_losses))
     cat(sprintf("Loss at epoch %d: training: %3f, validation: %3f\n", epoch, mean(train_losses), mean(valid_losses)))
   }
-  return(list(train_losses=train_losses, valid_losses=valid_losses, model=model, par_list=par_list))
+  return(list(model=model, mean_train_losses=mean_train_losses, mean_valid_losses=mean_valid_losses, 
+              train_losses=train_losses, valid_losses=valid_losses,par_list=par_list))
 }
 
 
