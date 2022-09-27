@@ -1,3 +1,5 @@
+library(caret)
+
 #' metricCrossValidate 
 #' takes a matrix and class vector, runs n-fold cross validation with a learned inner product,
 #' and reports the test and training loss with training.
