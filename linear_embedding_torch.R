@@ -163,7 +163,7 @@ train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, 
   for (epoch in seq_len(epochs)) {
 
     model$train()
-    train_losses <- c()  
+    #train_losses <- c()  
 
     coro::loop(for (b in train_dl) {
       optimizer$zero_grad()
@@ -176,7 +176,7 @@ train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, 
       }
       loss$backward()
       optimizer$step()
-      train_losses <- c(train_losses, loss$item())
+      #train_losses <- c(train_losses, loss$item())
       # loss <- nnf_binary_cross_entropy(output, b$y$to(dtype = torch_float(), device = device))
       # loss$backward()
       # optimizer$step()
@@ -187,6 +187,7 @@ train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, 
       par_list[[epoch]] <- lapply(save_pars, function(par) return(as.array(model[[par]]$cpu())))
     }
     model$eval()
+    train_losses <- c()
     valid_losses <- c()
 
     coro::loop(for (b in valid_dl) {
@@ -194,6 +195,12 @@ train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, 
 
       loss <- myloss(output$reshape(c(-1, output$shape[3])),b$y$to(device = device)$reshape(c(-1)))
       valid_losses <- c(valid_losses, loss$item())
+    })
+    coro::loop(for (b in train_dl){
+      output <- model(b$x$to(device = device))
+      
+      loss <- myloss(output$reshape(c(-1, output$shape[3])), b$y$to(device = device)$reshape(c(-1)))
+      train_losses <- c(train_losses, loss$item())
     })
 
     mean_train_losses <- c(mean_train_losses, mean(train_losses))
