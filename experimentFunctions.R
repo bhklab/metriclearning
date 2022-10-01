@@ -1,5 +1,6 @@
 library(CMAPToolkit)
 library(cmapR)
+library(torch)
 
 # Analyze L1000 datasets
 analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval", epochs=10){
@@ -18,11 +19,13 @@ analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval"
     
     L1Kxval <- metricCrossValidate(t(ds@mat), mysigs$pert_iname, nFolds=nFolds, epochs=epochs)
     saveRDS(L1Kxval, file=file.path(outpath, sprintf("L1Kxval_epch=%s_folds=%s_cell=%s.rds", epochs, nFolds, cell_id)))
+    torch.save(L1Kxval$model.state_dict(), file.path(outpath, sprintf("L1Kxval_epch=%s_folds=%s_cell=%s_model.pt", epochs, nFolds, cell_id)))
     return(L1Kxval)
   } else if (method == "allds"){
     L1Kmetric <- learnInnerProduct(t(ds@mat), mysigs$pert_iname, epochs=epochs)
     saveRDS(L1Kmetric, file=file.path(outpath, sprintf("L1Kmetric_epch=%s_cell=%s.rds", epochs, cell_id)))
-    return(L1kmetric)
+    torch.save(L1Kmetric$model.state_dict(), file.path(outpath, sprintf("L1Kmetric_epch=%s_cell=%s_model.pt", epochs, cell_id)))
+    return(L1Kmetric)
   } else if (method == "ntraining"){
     
   }
@@ -32,7 +35,8 @@ analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval"
 
 
 # Analyze Bray dataset
-analyzeBrayData <- function(braypath, outpath=".", method="xval"){
+analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10){
+  epochs <- as.numeric(epochs)
   brayds <- readRDS(braypath)
   
   metax <- grep("Meta", colnames(brayds))
@@ -44,15 +48,15 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval"){
   brayData[is.na(brayData)] <- 0
   
   if (method == "xval"){
-    epochs <- 10
     nFolds <- 5
     brayxval <- metricCrossValidate(brayData, brayMeta$Metadata_pert_id, nFolds=nFolds, epochs=epochs) 
     saveRDS(brayxval, file=file.path(outpath, sprintf("brayxval_epch=%d_folds=%d.rds", epochs, nFolds)))
+    torch.save(brayxval$model.state_dict(), file.path(outpath, sprintf("brayxval_epch=%d_folds=%d_model.pt", epochs, nFolds)))
     return(brayxval)
   } else if (method == "allds"){
-    epochs <- 250
     braymetric <- learnInnerProduct(brayData, brayMeta$Metadata_pert_id, epochs=epochs)
     saveRDS(braymetric, file=file.path(outpath, sprintf("braymetric_epch=%d.rds", epochs)))
+    torch.save(braymetric$model.state_dict(), file.path(outpath, sprintf("braymetric_epch=%d_model.pt", epochs)))
     return(braymetric)
   } else if (method == "ntraining"){
     # Study how decreasing the amount of training data affects outcome
