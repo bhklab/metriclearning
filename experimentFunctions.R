@@ -17,11 +17,11 @@ analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval"
     nFolds <- 5
     
     L1Kxval <- metricCrossValidate(t(ds@mat), mysigs$pert_iname, nFolds=nFolds, epochs=epochs)
-    saveRDS(L1Kxval, file=file.path(outpath, sprintf("L1Kxval_epch=%d_folds=%d_cell=%s.rds", epochs, nFolds, cell_id)))
+    saveRDS(L1Kxval, file=file.path(outpath, sprintf("L1Kxval_epch=%s_folds=%s_cell=%s.rds", epochs, nFolds, cell_id)))
     return(L1Kxval)
   } else if (method == "allds"){
     L1Kmetric <- learnInnerProduct(t(ds@mat), mysigs$pert_iname, epochs=epochs)
-    saveRDS(L1Kmetric, file=file.path(outpath, sprintf("L1Kmetric_epch=%d_cell=%s.rds", epochs, cell_id)))
+    saveRDS(L1Kmetric, file=file.path(outpath, sprintf("L1Kmetric_epch=%s_cell=%s.rds", epochs, cell_id)))
     return(L1kmetric)
   } else if (method == "ntraining"){
     
