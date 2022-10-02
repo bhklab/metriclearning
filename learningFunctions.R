@@ -153,3 +153,36 @@ innerProductGroups <- function(model, mat1, groupings, compact=0){
     return(list(same=samesim, diff=diffsim))
   }
 }
+
+
+metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), validClassLabs=c(), reps=1){
+  mygroups <- table(classes)[table(classes) > 1]
+
+  if (length(validClassLabs) == 0){
+    # Designate 20% of the classes as a test set
+    validClassLabs <- sample(names(mygroups), ceiling(length(mygroups)*0.2))
+  }  
+  trainClassLabs <- setdiff(names(mygroups), validClasses)
+
+  if(length(nvals) == 0 & length(trainClassLabs) > 10){
+    nvals <- round(exp(seq(log(10), log(length(trainClassLabs)), (log(length(trainClassLabs)) - log(10))/9))) 
+  }
+
+  res <- data.frame(trainClasses=numeric(), rep=numeric(), trainLoss=numeric(), validLoss=numeric(), validAvgLoss=numeric())
+  
+  validmat <- mat1[which(classes %in% validClassLabs),]
+  validclasses <- classes[which(classes %in% validClassLabs)]
+
+  for (nclasses in nvals){
+    myclasses <- sample(trainClassLabs, nclasses)
+
+    trainmat <- mat1[which(classes %in% myclasses),]
+    trainclasses <- classes[which(classes %in% myclasses)]
+
+    for (ii in seq_len(reps)){
+           
+    }
+  }
+}
+
+
