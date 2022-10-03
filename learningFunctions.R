@@ -112,23 +112,37 @@ cosine <- function(mat1, mat2){
 }
 
 
-
-innerProductGroups <- function(model, mat1, groupings, compact=0){
+#' innerProductGroups
+#' 
+#' This function takes a model, a data matrix, and group labels as input and computes the similarity
+#' between elements in the matrix that belong to the same class compared with the similarity between 
+#' elements in the matrix for different classes. 
+#' @param model Torch nn_module, ideally trained with learnInnerProduct
+#' @param mat1 Numeric, a matrix of size N x d, where rows are samples and columns are features
+#' @param classes Factor (or character, numeric), where two elements with the same value are assumed to be similar
+#' @param compact Boolean (default 0); whether to use sampling to compute the interclass similarity. For large matrices 
+#' of more than 10^4 samples, computing the interclass similarity can be very expensive. Compact samples 1e6 interclass 
+#' similarities, but computes all intraclass similarities. 
+#' 
+#' @return list of same = list of intraclass similarities, where each group is one element in the list; diff = interclass
+#' similarities
+#' @export
+innerProductGroups <- function(model, mat1, classes, compact=0){
   if (compact){
     # Use compact if the matrix is too large to effectively compute
     # Compact samples from the space of unlike similarities rather than computing the entire matrix
     
     # This could likely be accomplished more elegantly with dplyr
-    samesim <- sapply(names(table(groupings)[table(groupings)>1]), FUN=function(x){
-      ix <- which(groupings == x)
+    samesim <- sapply(names(table(classes)[table(classes)>1]), FUN=function(x){
+      ix <- which(classes == x)
       a <- innerProduct(model, mat1[ix, ], mat1[ix, ])
       a[upper.tri(a)]
     })
     
     jx <- sample(dim(mat1)[1], min(1000, dim(mat1)[1]))
     diffsim <- innerProduct(model, mat1[jx, ], mat1[jx, ])
-    for (mygrp in names(table(groupings)[table(groupings) > 1])){
-      ix <- which(jx %in% which(groupings == mygrp))
+    for (mygrp in names(table(classes)[table(classes) > 1])){
+      ix <- which(jx %in% which(classes == mygrp))
       if (length(ix) > 1){
         diffsim[ix, ix] <- NA
       }
@@ -140,14 +154,14 @@ innerProductGroups <- function(model, mat1, groupings, compact=0){
   } else {
     sims <- innerProduct(model, mat1, mat1)
 
-    samesim <- sapply(names(table(groupings)[table(groupings) > 1]), FUN=function(x) {
-      a <- sims[which(groupings == x), which(groupings == x)]
+    samesim <- sapply(names(table(classes)[table(classes) > 1]), FUN=function(x) {
+      a <- sims[which(classes == x), which(classes == x)]
       a[upper.tri(a)]
       })
     
     diffsim <- sims
-    for (mygroup in groupings){
-      ix <- which(groupings == mygroup)
+    for (mygroup in classes){
+      ix <- which(classes == mygroup)
       diffsim[ix,ix] <- NA
     }
     
@@ -156,8 +170,24 @@ innerProductGroups <- function(model, mat1, groupings, compact=0){
   }
 }
 
-
-metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), validClassLabs=c(), reps=1){
+#' metricNTraining
+#' 
+#' This function takes a dataset, partitions it into a 20% test set and 80% train set, then learns a similarity
+#' metric on subsets of the training set to evaluate generalization error on the test set as a function of 
+#' training examples. 
+#' @param mat1 Numeric, a matrix of size N x d, where rows are samples and columns are features
+#' @param classes Factor (or character, numeric), where two elements with the same value are assumed to be similar
+#' @param metric character (currently has no function)
+#' @param epochs Numeric, default 10
+#' @param nvals (optional) List of training sizes to test
+#' @param validClassLabs (optional) list of class labels to explicitly define the test set
+#' @param reps Numeric, number of times to run the sampling (default 1).
+#' @param samplePts Numeric, number of training sizes to test (default 10).
+#'
+#' @return matrix
+#'
+#' @export
+metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), validClassLabs=c(), reps=1, samplePts=10){
   mygroups <- table(classes)[table(classes) > 1]
 
   res <- data.frame(trainClasses=numeric(), 
@@ -165,7 +195,8 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
                     trainLoss=numeric(), 
                     trainAvgLoss=numeric(),
                     validLoss=numeric(), 
-                    validAvgLoss=numeric())
+                    validAvgLoss=numeric(), 
+                    validAURank=numeric())
   
   for (ii in seq_len(reps)){
     print(sprintf("ii = %d", ii))
@@ -177,36 +208,68 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
     trainClassLabs <- setdiff(names(mygroups), validClassLabs)
   
     if(length(nvals) == 0 & length(trainClassLabs) > 10){
-      nvals <- round(exp(seq(log(10), log(length(trainClassLabs)), (log(length(trainClassLabs)) - log(10))/9))) 
+      nmax <- min(5000, length(trainClassLabs))
+      nvals <- round(exp(seq(log(10), log(nmax), (log(nmax) - log(10))/(samplePts-1)))) 
     }
-  
 
     validmat <- mat1[which(classes %in% validClassLabs),]
     validclasses <- classes[which(classes %in% validClassLabs)]
   
-      for (nclasses in nvals){
-        print(sprintf("nclasses=%d", nclasses))
-        myclasses <- sample(trainClassLabs, nclasses)
+    # Add baseline for cosine:
+    trainGrpSim <- innerProductGroups("cosine", mat1[which(classes %in% trainClassLabs),], classes[which(classes %in% trainClassLabs)], compact=1)
+    validGrpSim <- innerProductGroups("cosine", validmat, validclasses, compact=1)
     
-        trainmat <- mat1[which(classes %in% myclasses),]
-        trainclasses <- classes[which(classes %in% myclasses)]
+    res <- rbind(res, data.frame(trainClasses=0, 
+                                 rep=ii, 
+                                 trainLoss=(mean(trainGrpSim$diff) - mean(unlist(trainGrpSim$same)))/sd(trainGrpSim$diff),
+                                 trainAvgLoss=mean((mean(trainGrpSim$diff) - sapply(trainGrpSim$same, mean))/sd(trainGrpSim$diff)),
+                                 validLoss=(mean(validGrpSim$diff) - mean(unlist(validGrpSim$same)))/sd(validGrpSim$diff),
+                                 validAvgLoss=mean((mean(validGrpSim$diff) - sapply(validGrpSim$same, mean))/sd(validGrpSim$diff)),
+                                 validAURank=1-mean(rankVectors(unlist(validGrpSim$same), validGrpSim$diff))))
+    
+    for (nclasses in nvals){
+      print(sprintf("nclasses=%d", nclasses))
+      myclasses <- sample(trainClassLabs, nclasses)
   
-        trainmodel <- learnInnerProduct(trainmat, trainclasses, epochs=epochs)
-        
-        trainGrpSim <- innerProductGroups(trainmodel$model, trainmat, trainclasses, compact=1)
-        validGrpSim <- innerProductGroups(trainmodel$model, validmat, validclasses, compact=1)
-        
-        res <- rbind(res, data.frame(trainClasses=nclasses, 
-                                     rep=ii, 
-                                     trainLoss=(mean(trainGrpSim$diff) - mean(unlist(trainGrpSim$same)))/sd(trainGrpSim$diff),
-                                     trainAvgLoss=mean((mean(trainGrpSim$diff) - sapply(trainGrpSim$same, mean))/sd(trainGrpSim$diff)),
-                                     validLoss=(mean(validGrpSim$diff) - mean(unlist(validGrpSim$same)))/sd(validGrpSim$diff),
-                                     validAvgLoss=mean((mean(validGrpSim$diff) - sapply(validGrpSim$same, mean))/sd(validGrpSim$diff))
-                     ))
-      }
+      trainmat <- mat1[which(classes %in% myclasses),]
+      trainclasses <- classes[which(classes %in% myclasses)]
+
+      trainmodel <- learnInnerProduct(trainmat, trainclasses, epochs=epochs)
+      
+      trainGrpSim <- innerProductGroups(trainmodel$model, trainmat, trainclasses, compact=1)
+      validGrpSim <- innerProductGroups(trainmodel$model, validmat, validclasses, compact=1)
+      
+      res <- rbind(res, data.frame(trainClasses=nclasses, 
+                                   rep=ii, 
+                                   trainLoss=(mean(trainGrpSim$diff) - mean(unlist(trainGrpSim$same)))/sd(trainGrpSim$diff),
+                                   trainAvgLoss=mean((mean(trainGrpSim$diff) - sapply(trainGrpSim$same, mean))/sd(trainGrpSim$diff)),
+                                   validLoss=(mean(validGrpSim$diff) - mean(unlist(validGrpSim$same)))/sd(validGrpSim$diff),
+                                   validAvgLoss=mean((mean(validGrpSim$diff) - sapply(validGrpSim$same, mean))/sd(validGrpSim$diff)),
+                                   validAURank=1-mean(rankVectors(unlist(validGrpSim$same), validGrpSim$diff))))
+    }
   }
   
   return(res)
 }
 
-
+#' rankVectors
+#' 
+#' rank_vectors - given two vectors a and b, find for each element k of a: mean(b > k)
+#' That is, find the percent rank within b of each element of a.  O(|a|+|b|) time.
+#' 
+#' @export
+rankVectors <- function(a,b){
+  if (length(b) == 0){
+    return(numeric(length(a)))
+  }
+  
+  # Given two input vectors a and b, returns for each element a_i of a: how many elements of b are less than or equal to a_i
+  myvals <- data.frame(val=sort(a), ix=order(a))
+  myvals <- rbind(myvals, data.frame(val=sort(b), ix=0))
+  myvals <- myvals[order(myvals$val, myvals$ix), ]
+  myvals$count <- cumsum(myvals$ix == 0)
+  
+  arank <- numeric(length(a))
+  arank[myvals$ix[myvals$ix > 0]] <- 1 - myvals$count[myvals$ix > 0]/length(b)
+  return(arank)
+}

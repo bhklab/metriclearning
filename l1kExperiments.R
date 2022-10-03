@@ -10,8 +10,4 @@ mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$cell_id == "SKL" & l1k_meta$siginfo$
 
 ds <- parse_gctx(get_level5_ds(datapath), rid=l1k_meta$landmarks$pr_gene_id, cid=mysigs$sig_id)
 
-res <- metricNTraining(t(ds@mat), mysigs$pert_iname, epochs=10, reps=5)
-#  ds <- parse_gctx(fname=get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=mysigs$sig_id)
-
-#metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), validClassLabs=c(), reps=1){
-  
+res0 <- metricNTraining(t(ds@mat), mysigs$pert_iname, epochs=5, reps=1)

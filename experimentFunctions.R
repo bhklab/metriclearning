@@ -27,11 +27,12 @@ analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval"
     torch_save(L1Kmetric$model, file.path(outpath, sprintf("L1Kmetric_epch=%s_cell=%s_model.pt", epochs, cell_id)))
     return(L1Kmetric)
   } else if (method == "ntraining"){
-
     
+    res <- metricNTraining(t(ds@mat), mysigs$pert_iname, epochs=epochs, reps=3)
+    saveRDS(res, file=file.path(outpath, sprintf("L1Kntraining_epch=%s_cell=%s.rds", epochs, cell_id)))
+    return(res)
   }
 }
-
 
 
 
@@ -60,12 +61,15 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10){
     torch_save(braymetric$model, file.path(outpath, sprintf("braymetric_epch=%d_model.pt", epochs)))
     return(braymetric)
   } else if (method == "ntraining"){
-    # Study how decreasing the amount of training data affects outcome
+    # Study how decreasing the amount of training data affects outcomes
+    
+    res <- metricNTraining(brayData, brayMeta$Metadata_pert_id, epochs=epochs, reps=5)
+    saveRDS(res, file=file.path(outpath, sprintf("brayntraining_epch=%s.rds", epochs)))
+    return(res)
   }
   
 }
 
 
 
-
-# Make ROC plots, summary plots
+# analyze generic cell painting dataset
