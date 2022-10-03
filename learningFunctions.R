@@ -80,8 +80,10 @@ learnInnerProduct <- function(mat1, classes, metric="", epochs=100, loss=mycos_t
 #' @export
 innerProduct <- function(model, mat1, mat2){
   
-  if (model == "cosine"){
-    return(cosine(mat1, mat2))
+  if (is.character(model)){
+    if (model == "cosine"){
+      return(cosine(mat1, mat2))
+    }
   }
   # Check for integrity of variables?
   m1 <- model(torch_tensor(mat1, dtype=torch_float()))
@@ -123,7 +125,7 @@ innerProductGroups <- function(model, mat1, groupings, compact=0){
       a[upper.tri(a)]
     })
     
-    jx <- sample(dim(mat1)[1], 1000)
+    jx <- sample(dim(mat1)[1], min(1000, dim(mat1)[1]))
     diffsim <- innerProduct(model, mat1[jx, ], mat1[jx, ])
     for (mygrp in names(table(groupings)[table(groupings) > 1])){
       ix <- which(jx %in% which(groupings == mygrp))
@@ -158,31 +160,53 @@ innerProductGroups <- function(model, mat1, groupings, compact=0){
 metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), validClassLabs=c(), reps=1){
   mygroups <- table(classes)[table(classes) > 1]
 
-  if (length(validClassLabs) == 0){
-    # Designate 20% of the classes as a test set
-    validClassLabs <- sample(names(mygroups), ceiling(length(mygroups)*0.2))
-  }  
-  trainClassLabs <- setdiff(names(mygroups), validClasses)
-
-  if(length(nvals) == 0 & length(trainClassLabs) > 10){
-    nvals <- round(exp(seq(log(10), log(length(trainClassLabs)), (log(length(trainClassLabs)) - log(10))/9))) 
-  }
-
-  res <- data.frame(trainClasses=numeric(), rep=numeric(), trainLoss=numeric(), validLoss=numeric(), validAvgLoss=numeric())
+  res <- data.frame(trainClasses=numeric(), 
+                    rep=numeric(), 
+                    trainLoss=numeric(), 
+                    trainAvgLoss=numeric(),
+                    validLoss=numeric(), 
+                    validAvgLoss=numeric())
   
-  validmat <- mat1[which(classes %in% validClassLabs),]
-  validclasses <- classes[which(classes %in% validClassLabs)]
-
-  for (nclasses in nvals){
-    myclasses <- sample(trainClassLabs, nclasses)
-
-    trainmat <- mat1[which(classes %in% myclasses),]
-    trainclasses <- classes[which(classes %in% myclasses)]
-
-    for (ii in seq_len(reps)){
-           
+  for (ii in seq_len(reps)){
+    print(sprintf("ii = %d", ii))
+  
+    if (length(validClassLabs) == 0){
+      # Designate 20% of the classes as a test set
+      validClassLabs <- sample(names(mygroups), ceiling(length(mygroups)*0.2))
+    }  
+    trainClassLabs <- setdiff(names(mygroups), validClassLabs)
+  
+    if(length(nvals) == 0 & length(trainClassLabs) > 10){
+      nvals <- round(exp(seq(log(10), log(length(trainClassLabs)), (log(length(trainClassLabs)) - log(10))/9))) 
     }
+  
+
+    validmat <- mat1[which(classes %in% validClassLabs),]
+    validclasses <- classes[which(classes %in% validClassLabs)]
+  
+      for (nclasses in nvals){
+        print(sprintf("nclasses=%d", nclasses))
+        myclasses <- sample(trainClassLabs, nclasses)
+    
+        trainmat <- mat1[which(classes %in% myclasses),]
+        trainclasses <- classes[which(classes %in% myclasses)]
+  
+        trainmodel <- learnInnerProduct(trainmat, trainclasses, epochs=epochs)
+        
+        trainGrpSim <- innerProductGroups(trainmodel$model, trainmat, trainclasses, compact=1)
+        validGrpSim <- innerProductGroups(trainmodel$model, validmat, validclasses, compact=1)
+        
+        res <- rbind(res, data.frame(trainClasses=nclasses, 
+                                     rep=ii, 
+                                     trainLoss=(mean(trainGrpSim$diff) - mean(unlist(trainGrpSim$same)))/sd(trainGrpSim$diff),
+                                     trainAvgLoss=mean((mean(trainGrpSim$diff) - sapply(trainGrpSim$same, mean))/sd(trainGrpSim$diff)),
+                                     validLoss=(mean(validGrpSim$diff) - mean(unlist(validGrpSim$same)))/sd(validGrpSim$diff),
+                                     validAvgLoss=mean((mean(validGrpSim$diff) - sapply(validGrpSim$same, mean))/sd(validGrpSim$diff))
+                     ))
+      }
   }
+  
+  return(res)
 }
 
 
