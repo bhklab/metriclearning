@@ -208,7 +208,7 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
     trainClassLabs <- setdiff(names(mygroups), validClassLabs)
   
     if(length(nvals) == 0 & length(trainClassLabs) > 10){
-      nmax <- min(5000, length(trainClassLabs))
+      nmax <- min(3000, length(trainClassLabs))
       nvals <- round(exp(seq(log(10), log(nmax), (log(nmax) - log(10))/(samplePts-1)))) 
     }
 

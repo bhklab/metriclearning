@@ -8,6 +8,8 @@ analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval"
   
   if (cell_id == "all"){
     mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$pert_type == "trt_cp",]
+    # This is a bit of a hack to get the learning approach to consider only same-cell line pairs
+    mysigs$pert_iname <- sprintf("%s_%s", mysigs$pert_iname, mysigs$cell_id)
   } else {
     mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$cell_id == cell_id & l1k_meta$siginfo$pert_type == "trt_cp",]
   }
@@ -28,7 +30,7 @@ analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval"
     return(L1Kmetric)
   } else if (method == "ntraining"){
     
-    res <- metricNTraining(t(ds@mat), mysigs$pert_iname, epochs=epochs, reps=3)
+    res <- metricNTraining(t(ds@mat), mysigs$pert_iname, epochs=epochs, reps=5)
     saveRDS(res, file=file.path(outpath, sprintf("L1Kntraining_epch=%s_cell=%s.rds", epochs, cell_id)))
     return(res)
   }
@@ -109,7 +111,7 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10){
   brayData[is.na(brayData)] <- 0
   
   if (method == "xval"){
-    nFolds <- 5
+    nFolds <- 3
     brayxval <- metricCrossValidate(brayData, brayMeta$Metadata_pert_id, nFolds=nFolds, epochs=epochs) 
     saveRDS(brayxval, file=file.path(outpath, sprintf("brayxval_epch=%d_folds=%d.rds", epochs, nFolds)))
     torch_save(brayxval$model, file.path(outpath, sprintf("brayxval_epch=%d_folds=%d_model.pt", epochs, nFolds)))
@@ -122,7 +124,7 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10){
   } else if (method == "ntraining"){
     # Study how decreasing the amount of training data affects outcomes
     
-    res <- metricNTraining(brayData, brayMeta$Metadata_pert_id, epochs=epochs, reps=5)
+    res <- metricNTraining(brayData, brayMeta$Metadata_pert_id, epochs=epochs, reps=2)
     saveRDS(res, file=file.path(outpath, sprintf("brayntraining_epch=%s.rds", epochs)))
     return(res)
   }
