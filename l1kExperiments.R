@@ -35,5 +35,5 @@ testprts <- setdiff(grpprts, trainprts)
 
 # Test Cell Line Specificity
 
-clsres <- analyzeL1KCellLineSpecificity(datapath, datapath, cell_ids=c("HEPG2", "HCC515", "NPC"), outpath=".", ncpds=10000, epochs=10, iter=1)
+clsres_fix <- analyzeL1KCellLineSpecificity(datapath, datapath, cell_ids=mycellids, outpath=".", ncpds=2000, epochs=10, iter=1)
   

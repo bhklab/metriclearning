@@ -42,6 +42,8 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
   l1k_meta <- read_l1k_meta(metapath, version=2020)
   
   mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$pert_type == "trt_cp" & l1k_meta$siginfo$cell_id %in% cell_ids,]
+  mysigs$allpert_iname <- sprintf("%s_%s", mysigs$pert_iname, mysigs$cell_id)
+
   
   res <- data.frame(iter=numeric(), cell_id=character(), trainSet=character(), trainLoss=numeric(), 
                     testLoss=numeric(), testAvgLoss=numeric(), testAURank=numeric())
@@ -61,7 +63,7 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
       ds_test <- subset_gct(ds, cid=mysigs$sig_id[mysigs$cell_id == mycell & mysigs$pert_iname %in% testPerts])
       
       cellModel <- learnInnerProduct(t(ds_train@mat), mysigs$pert_iname[match(ds_train@cid, mysigs$sig_id)], epochs=epochs)
-      allModel <- learnInnerProduct(t(all_train@mat), mysigs$pert_iname[match(all_train@cid, mysigs$sig_id)], epochs=epochs)
+      allModel <- learnInnerProduct(t(all_train@mat), mysigs$allpert_iname[match(all_train@cid, mysigs$sig_id)], epochs=epochs)
       
       cosineGrpSim <- innerProductGroups("cosine", t(ds_test@mat), mysigs$pert_iname[match(ds_test@cid, mysigs$sig_id)], compact=1)
       cellGrpSim <- innerProductGroups(cellModel$model, t(ds_test@mat), mysigs$pert_iname[match(ds_test@cid, mysigs$sig_id)], compact=1)
@@ -93,6 +95,7 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
     }
   }
   
+  saveRDS(res, file=file.path(outpath, sprintf("L1KCellLineSpec_nLines=%d_epoch=%s_npcds=%d.rds", length(cell_ids), epochs, ncpds)))
   return(res)
 }
 
