@@ -247,6 +247,8 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
                                    validAvgLoss=mean((mean(validGrpSim$diff) - sapply(validGrpSim$same, mean))/sd(validGrpSim$diff)),
                                    validAURank=1-mean(rankVectors(unlist(validGrpSim$same), validGrpSim$diff))))
     }
+    
+    validClassLabs <- c()
   }
   
   return(res)
