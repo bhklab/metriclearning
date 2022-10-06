@@ -51,7 +51,7 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
   ds <- parse_gctx(get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=mysigs$sig_id)
   
   for (ii in iter){
-    print(sprintf("ii = %d", ii))
+    print(sprintf("ii = %s", ii))
     grpPerts <- sample(unique(mysigs$pert_iname), min(length(unique(mysigs$pert_iname)), ncpds))
     trainPerts <- sample(grpPerts, round(length(grpPerts)/2))
     testPerts <- setdiff(grpPerts, trainPerts)
@@ -95,7 +95,7 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
     }
   }
   
-  saveRDS(res, file=file.path(outpath, sprintf("L1KCellLineSpec_nLines=%d_epoch=%s_npcds=%d.rds", length(cell_ids), epochs, ncpds)))
+  saveRDS(res, file=file.path(outpath, sprintf("L1KCellLineSpec_nLines=%d_epoch=%s_npcds=%s.rds", length(cell_ids), epochs, ncpds)))
   return(res)
 }
 

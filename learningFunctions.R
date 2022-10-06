@@ -188,7 +188,8 @@ innerProductGroups <- function(model, mat1, classes, compact=0){
 #'
 #' @export
 metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), validClassLabs=c(), reps=1, samplePts=10){
-  mygroups <- table(classes)[table(classes) > 1]
+  mygroups <- table(classes)[table(classes) > 2]
+  bggroups <- table(classes)[table(classes) <= 2]
 
   res <- data.frame(trainClasses=numeric(), 
                     rep=numeric(), 
@@ -203,9 +204,11 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
   
     if (length(validClassLabs) == 0){
       # Designate 20% of the classes as a test set
-      validClassLabs <- sample(names(mygroups), ceiling(length(mygroups)*0.2))
+      validClassLabs <- union(sample(names(mygroups), ceiling(length(mygroups)*0.2)), sample(names(bggroups), ceiling(length(bggroups)*0.2)))
     }  
     trainClassLabs <- setdiff(names(mygroups), validClassLabs)
+    trainBgLabs <- setdiff(bggroups, validClassLabs)
+    allTrainLabs <- union(trainClassLabs, trainBgLabs)
   
     if(length(nvals) == 0 & length(trainClassLabs) > 10){
       nmax <- min(3000, length(trainClassLabs))
@@ -216,7 +219,7 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
     validclasses <- classes[which(classes %in% validClassLabs)]
   
     # Add baseline for cosine:
-    trainGrpSim <- innerProductGroups("cosine", mat1[which(classes %in% trainClassLabs),], classes[which(classes %in% trainClassLabs)], compact=1)
+    trainGrpSim <- innerProductGroups("cosine", mat1[which(classes %in% allTrainLabs),], classes[which(classes %in% allTrainLabs)], compact=1)
     validGrpSim <- innerProductGroups("cosine", validmat, validclasses, compact=1)
     
     res <- rbind(res, data.frame(trainClasses=0, 
@@ -229,7 +232,7 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
     
     for (nclasses in nvals){
       print(sprintf("nclasses=%d", nclasses))
-      myclasses <- sample(trainClassLabs, nclasses)
+      myclasses <- union(sample(trainClassLabs, nclasses), trainBgLabs)
   
       trainmat <- mat1[which(classes %in% myclasses),]
       trainclasses <- classes[which(classes %in% myclasses)]
