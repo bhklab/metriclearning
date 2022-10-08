@@ -73,7 +73,7 @@ genDataset <- dataset(
     mycp <- self$mycmpds[[i]]
     
     ix <- which(self$identVec == mycp)
-    jx <- sample(setdiff(seq_len(dim(self$sigs)[1]), ix), 2*length(ix))
+    jx <- sample(setdiff(seq_len(dim(self$sigs)[1]), ix), min(2*length(ix),  length(setdiff(seq_len(dim(self$sigs)[1]), ix))))
     
     mymat <- torch_cat(list(self$sigs[ix, 1:self$ndim], self$sigs[jx, 1:self$ndim]))
     myclass <- torch_tensor(c(rep(1, length(ix)), rep(0, length(jx))))
