@@ -104,3 +104,9 @@ plot(log2(hcc$trainClasses + 1), hcc$validAURank, pch=16, col=alpha("red", 0.6),
      main="HCC515 Validation AU Rank vs Number of Training Compounds", ylim=c(0.5,1))
 lines(x=c(-10, 1000), y=c(mean(hcc$validAURank[hcc$trainClasses == 0]), mean(hcc$validAURank[hcc$trainClasses == 0])), col="black", lty=2)
 dev.off()
+
+
+
+# Debugging
+res <- analyzeL1KData(datapath, datapath, cell_id="all", outpath=".", method="ntraining", epochs=1)
+  
