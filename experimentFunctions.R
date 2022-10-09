@@ -100,6 +100,7 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
 }
 
 
+
 # Analyze Bray dataset
 analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10){
   epochs <- as.numeric(epochs)
@@ -111,6 +112,7 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10){
   
   brayData <- scale(brayData, center=TRUE, scale=TRUE)
   # apparently some axes do not vary
+  # Check for infinities
   brayData[is.na(brayData)] <- 0
   
   if (method == "xval"){
@@ -137,3 +139,86 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10){
 
 
 # analyze generic cell painting dataset
+analyzeNormCPData <- function(cppath, outpath=".", method="xval", epochs=10, dsname="myds"){
+  epochs <- as.numeric(epochs)
+  
+  cpds <- loadLincsData(cppath, splitGrps = 1)
+  cpData <- cpds$ds
+  cpMeta <- cpds$metads
+  
+  # Safety check
+  cpData[is.na(cpData)] <- 0
+  
+  if (method == "xval"){
+    nFolds <- 3
+    cpxval <- metricCrossValidate(cpData, cpMeta$Metadata_pert_id, nFolds=nFolds, epochs=epochs) 
+    saveRDS(cpxval, file=file.path(outpath, sprintf("%scp_xval_epch=%d_folds=%d.rds", dsname, epochs, nFolds)))
+    torch_save(cpxval$model, file.path(outpath, sprintf("%scp_xval_epch=%d_folds=%d_model.pt", dsname, epochs, nFolds)))
+    return(cpxval)
+  } else if (method == "allds"){
+    cpmetric <- learnInnerProduct(cpData, cpMeta$Metadata_pert_id, epochs=epochs)
+    saveRDS(cpmetric, file=file.path(outpath, sprintf("%scp_metric_epch=%d.rds", dsname, epochs)))
+    torch_save(cpmetric$model, file.path(outpath, sprintf("%scp_metric_epch=%d_model.pt", dsname, epochs)))
+    return(cpmetric)
+  } else if (method == "ntraining"){
+    # Study how decreasing the amount of training data affects outcomes
+    
+    res <- metricNTraining(cpData, cpMeta$Metadata_pert_id, epochs=epochs, reps=2)
+    saveRDS(res, file=file.path(outpath, sprintf("%scp_ntraining_epch=%s.rds", epochs)))
+    return(res)
+  }
+  
+}
+
+
+
+### Move to separate dataloaders file probs:
+loadBrayData <- function(braypath, center=1){
+  
+  combds <- readRDS(braypath)
+  
+  ### Split data 
+  ### Unnormalized data
+  metax <- grep("Meta", colnames(combds))
+  combMeta <- combds[, metax]
+  combData <- as.matrix(combds[, setdiff(seq(dim(combds)[2]), metax)])
+  
+  if (center){
+    combDataNorm <- scale(combData, center=TRUE, scale=TRUE)
+    # apparently some axes do not vary
+    combDataNorm[is.na(combDataNorm)] <- 0
+  }
+  
+  return(list(ds=combData, metads=combMeta))
+}
+
+
+loadLincsData <- function(lincspath, samplecp=0, splitGrps=1){
+  
+  cpds <- readRDS(lincspath)
+  
+  metax <- grep("Meta", colnames(cpds))
+  cpMeta <- cpds[, metax]
+  cpData <- as.matrix(cpds[, -metax])
+  
+  cpMeta$Metadata_pert_iname[cpMeta$Metadata_pert_iname == ""] <- "empty"
+  
+  # There are a large number of posiive and negative controls. To help with training, I break them up
+  # into groups of 60, which is the largest set of compounds apart from the main compounds
+  
+  if (splitGrps){
+    cpcounts <- table(cpMeta$Metadata_pert_iname)
+    bigCPs <- names(cpcounts[cpcounts > 60])
+    
+    for (mycp in bigCPs){
+      ixgrps <- ceiling(sample(sum(cpMeta$Metadata_pert_iname == mycp))/60)
+      cpMeta$Metadata_pert_iname[cpMeta$Metadata_pert_iname == mycp] <- sprintf("%s_%d", mycp, ixgrps)
+    }
+  }
+  
+  #if (samplecp > 0){
+  #  cpcounts <- table(cpMeta$Metadata_pert_iname)
+  #}
+  
+  return(list(ds=cpData, metads=cpMeta))
+}

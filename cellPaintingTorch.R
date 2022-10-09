@@ -141,3 +141,13 @@ lines(density(unlist(ipgrps_test2$same), bw=0.01), col="red")
 
 mxval <- metricCrossValidate(combDataNorm[ixTrain2, 1:100], combMeta$Metadata_pert_id[ixTrain2], nFolds=5, epochs=3) 
 
+
+
+
+### Run on LINCS data
+lincsdatadir <- "/Users/iansmith/Work/code/lincs-cell-painting/spherized_profiles/profiles"
+
+ds <- loadLincsData("2016_04_01_a549_48hr_batch1_dmso_spherized_profiles_with_input_normalized_by_dmso.rds")
+
+tres <- analyzeNormCPData(cppath="2017_12_05_Batch2_dmso_spherized_profiles_with_input_normalized_by_whole_plate.rds",
+                          outpath=".", method="xval", epochs=1, dsname="lincsB2Plate")
