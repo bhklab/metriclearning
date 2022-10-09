@@ -10,11 +10,18 @@ analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval"
     mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$pert_type == "trt_cp",]
     # This is a bit of a hack to get the learning approach to consider only same-cell line pairs
     mysigs$pert_iname <- sprintf("%s_%s", mysigs$pert_iname, mysigs$cell_id)
+    
+    # Mysigs has 196k unique pert+cell combinations. For expediency, sample:
+    mysigs <- mysigs[mysigs$pert_iname %in% sample(unique(mysigs$pert_iname), 20000), ]
+
+    ds <- parse_gctx(fname=get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=l1k_meta$siginfo$sig_id[l1k_meta$siginfo$pert_type == "trt_cp"])
+    ds <- subset_gct(ds, cid=mysigs$sig_id)
   } else {
     mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$cell_id == cell_id & l1k_meta$siginfo$pert_type == "trt_cp",]
+    ds <- parse_gctx(fname=get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=mysigs$sig_id)
   }
   
-  ds <- parse_gctx(fname=get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=mysigs$sig_id)
+  print(sprintf("DS dimensions: %d x %d", dim(ds@mat)[1], dim(ds@mat)[2]))
   
   if (method == "xval"){
     nFolds <- 5

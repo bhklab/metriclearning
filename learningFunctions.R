@@ -219,9 +219,12 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
     validclasses <- classes[which(classes %in% validClassLabs)]
   
     # Add baseline for cosine:
+    print("Computing group sim")
     trainGrpSim <- innerProductGroups("cosine", mat1[which(classes %in% allTrainLabs),], classes[which(classes %in% allTrainLabs)], compact=1)
     validGrpSim <- innerProductGroups("cosine", validmat, validclasses, compact=1)
     
+    print("Initial group sim computed")
+
     res <- rbind(res, data.frame(trainClasses=0, 
                                  rep=ii, 
                                  trainLoss=(mean(trainGrpSim$diff) - mean(unlist(trainGrpSim$same)))/sd(trainGrpSim$diff),
