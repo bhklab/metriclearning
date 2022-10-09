@@ -28,7 +28,9 @@ analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval"
     
     L1Kxval <- metricCrossValidate(t(ds@mat), mysigs$pert_iname, nFolds=nFolds, epochs=epochs)
     saveRDS(L1Kxval, file=file.path(outpath, sprintf("L1Kxval_epch=%s_folds=%s_cell=%s.rds", epochs, nFolds, cell_id)))
-    torch_save(L1Kxval$model, file.path(outpath, sprintf("L1Kxval_epch=%s_folds=%s_cell=%s_model.pt", epochs, nFolds, cell_id)))
+    
+    #no model gets returned by metricCrossValidate
+    #torch_save(L1Kxval$model, file.path(outpath, sprintf("L1Kxval_epch=%s_folds=%s_cell=%s_model.pt", epochs, nFolds, cell_id)))
     return(L1Kxval)
   } else if (method == "allds"){
     L1Kmetric <- learnInnerProduct(t(ds@mat), mysigs$pert_iname, epochs=epochs)

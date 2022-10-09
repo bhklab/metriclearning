@@ -26,7 +26,7 @@ metricCrossValidate <- function(mat1, classes, nFolds=5, metric="", epochs=100){
     res <- learnInnerProduct(mat1[trainix, ], classes[trainix], metric=metric, epochs=epochs)  
     
     
-    res_all[sprintf("fold%d", length(res_all))] <- list(res)
+    res_all[sprintf("fold%d", length(res_all))] <- list(res$res)
   }
   
   return(res_all)
