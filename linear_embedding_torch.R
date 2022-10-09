@@ -208,7 +208,7 @@ train_function <- function(model, epochs=5, train_dl, valid_dl, myloss, device, 
     cat(sprintf("Loss at epoch %d: training: %3f, validation: %3f\n", epoch, mean(train_losses), mean(valid_losses)))
   }
   return(list(model=model, mean_train_losses=mean_train_losses, mean_valid_losses=mean_valid_losses, 
-              train_losses=train_losses, valid_losses=valid_losses,par_list=par_list))
+              train_losses=train_losses, valid_losses=valid_losses, par_list=par_list))
 }
 
 

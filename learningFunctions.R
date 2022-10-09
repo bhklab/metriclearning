@@ -9,27 +9,55 @@ library(caret)
 #' @param metric Character, denotes which type of metric to learn. One of {}.
 #' @param epochs Numeric, the number of epochs of training to run (default = 100)
 
-metricCrossValidate <- function(mat1, classes, nFolds=5, metric="", epochs=100){
+metricCrossValidate <- function(mat1, classes, nFolds=5, metric="", epochs=100, loss=mycos_t_loss){
 # Revise to intelligently choose folds in the case of a wide range of class sizes
 # But for now, do it naively
   
   mygroups <- table(classes)
   myfolds <- createFolds(names(mygroups), k=nFolds)
-  #myfolds0 <- createFolds(names(mygroups)[mygroups == 1], k=nFolds)
-  
+  myfolds <- sapply(myfolds, FUN=function(x) names(mygroups[x]))
+
   res_all <- list(myfolds=myfolds)
+  mymodels <- list()
   
   for (testset in myfolds){
     testix <- which(classes %in% testset)
     trainix <- setdiff(seq_along(classes), testix)
     
-    res <- learnInnerProduct(mat1[trainix, ], classes[trainix], metric=metric, epochs=epochs)  
+    # res <- learnInnerProduct(mat1[trainix, ], classes[trainix], metric=metric, epochs=epochs)  
     
+    gends_train <- genDataset(mat1[trainix,], classes[trainix], pca_first = FALSE, scale = FALSE, center = FALSE)
+    train_dl <- dataloader(gends_train, batch_size = 1, shuffle = TRUE)
     
-    res_all[sprintf("fold%d", length(res_all))] <- list(res)
+    gends_valid <- genDataset(mat1[testix,], classes[testix], pca_first=FALSE, scale=FALSE, center=FALSE)
+    valid_dl <- dataloader(gends_valid, batch_size = 1, shuffle = TRUE)
+    
+    model <- OneLayerLinear(dim(mat1)[2], dim(mat1)[2])
+    device <- if (cuda_is_available()) torch_device("cuda:0") else "cpu"
+    model <- model$to(device = device)
+    optimizer <- optim_adam(model$parameters, lr = 0.01)
+    
+    res <- train_function(model=model, 
+                          train_dl=train_dl, 
+                          valid_dl=valid_dl, 
+                          myloss=loss, 
+                          device=device, 
+                          optimizer=optimizer, 
+                          epochs = epochs)
+    
+    print("Computing baseline sim")
+    trainGrpSim <- innerProductGroups("cosine", mat1[trainix,], classes[trainix], compact=1)
+    validGrpSim <- innerProductGroups("cosine", mat1[testix,], classes[testix], compact=1)
+    
+    res$baseline_train_loss <- mean((mean(trainGrpSim$diff) - sapply(trainGrpSim$same, mean))/sd(trainGrpSim$diff))
+    res$baseline_valid_loss <- mean((mean(validGrpSim$diff) - sapply(validGrpSim$same, mean))/sd(validGrpSim$diff))
+  
+    # Separate the final model from each fold
+    res_all[sprintf("fold%d", length(res_all))] <- list(res[names(res) != "model"])
+    mymodels <- c(mymodels, res$model)
   }
   
-  return(res_all)
+  return(list(res_all=res_all, mymodels=mymodels))
 }
 
 
@@ -66,7 +94,7 @@ learnInnerProduct <- function(mat1, classes, metric="", epochs=100, loss=mycos_t
                         )
   
   # Return training loss?
-  return(list(model=model, res=res))
+  return(res)
 }
 
 
