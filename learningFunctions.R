@@ -52,7 +52,7 @@ metricCrossValidate <- function(mat1, classes, nFolds=5, metric="", epochs=100, 
     res$baseline_train_loss <- mean((mean(trainGrpSim$diff) - sapply(trainGrpSim$same, mean))/sd(trainGrpSim$diff))
     res$baseline_valid_loss <- mean((mean(validGrpSim$diff) - sapply(validGrpSim$same, mean))/sd(validGrpSim$diff))
   
-    # Separate the final model from each fold
+    # Separate the final model from each fold to save the results
     res_all[sprintf("fold%d", length(res_all))] <- list(res[names(res) != "model"])
     mymodels <- c(mymodels, res$model)
   }

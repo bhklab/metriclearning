@@ -27,6 +27,7 @@ analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval"
     nFolds <- 5
     
     L1Kxval <- metricCrossValidate(t(ds@mat), mysigs$pert_iname, nFolds=nFolds, epochs=epochs)
+
     # Save the result
     saveRDS(L1Kxval$res_all, file=file.path(outpath, sprintf("L1Kxval_epch=%s_folds=%s_cell=%s.rds", epochs, nFolds, cell_id)))
     
