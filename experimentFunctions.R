@@ -3,7 +3,7 @@ library(cmapR)
 library(torch)
 
 # Analyze L1000 datasets
-analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval", epochs=10, saveModel=FALSE){
+analyzeL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xval", epochs=10, saveModel=TRUE){
   l1k_meta <- read_l1k_meta(metapath, version=2020)
   
   if (cell_id == "all"){
