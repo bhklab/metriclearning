@@ -67,7 +67,7 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
   
   ds <- parse_gctx(get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=mysigs$sig_id)
   
-  for (ii in iter){
+  for (ii in seq_len(iter)){
     print(sprintf("ii = %s", ii))
     grpPerts <- sample(unique(mysigs$pert_iname), min(length(unique(mysigs$pert_iname)), ncpds))
     trainPerts <- sample(grpPerts, round(length(grpPerts)/2))
@@ -76,12 +76,14 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
     for (mycell in cell_ids){
       print(sprintf("mycell = %s", mycell))
       all_train <- subset_gct(ds, cid=mysigs$sig_id[mysigs$cell_id != mycell & mysigs$pert_iname %in% trainPerts])
+      
       ds_train <- subset_gct(ds, cid=mysigs$sig_id[mysigs$cell_id == mycell & mysigs$pert_iname %in% trainPerts])
       ds_test <- subset_gct(ds, cid=mysigs$sig_id[mysigs$cell_id == mycell & mysigs$pert_iname %in% testPerts])
       
       cellModel <- learnInnerProduct(t(ds_train@mat), mysigs$pert_iname[match(ds_train@cid, mysigs$sig_id)], epochs=epochs)
       allModel <- learnInnerProduct(t(all_train@mat), mysigs$allpert_iname[match(all_train@cid, mysigs$sig_id)], epochs=epochs)
       
+      cosineTrainSim <- innerProductGroups("cosine", t(ds_train@mat), mysigs$pert_iname[match(ds_train@cid, mysigs$sig_id)], compact=1)
       cosineGrpSim <- innerProductGroups("cosine", t(ds_test@mat), mysigs$pert_iname[match(ds_test@cid, mysigs$sig_id)], compact=1)
       cellGrpSim <- innerProductGroups(cellModel$model, t(ds_test@mat), mysigs$pert_iname[match(ds_test@cid, mysigs$sig_id)], compact=1)
       allGrpSim <- innerProductGroups(allModel$model, t(ds_test@mat), mysigs$pert_iname[match(ds_test@cid, mysigs$sig_id)], compact=1)
@@ -89,7 +91,7 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
       res <- rbind(res, data.frame(iter=ii, 
                                    cell_id=mycell,
                                    trainSet="cosine",
-                                   trainLoss=NA,
+                                   trainAvgLoss=mean((mean(cosineTrainSim$diff) - sapply(cosineTrainSim$same, mean))/sd(cosineTrainSim$diff)),
                                    testLoss=(mean(cosineGrpSim$diff - mean(unlist(cosineGrpSim$same)))/sd(cosineGrpSim$diff)),
                                    testAvgLoss=mean((mean(cosineGrpSim$diff) - sapply(cosineGrpSim$same, mean))/sd(cosineGrpSim$diff)), 
                                    testAURank=1 - mean(rankVectors(unlist(cosineGrpSim$same), cosineGrpSim$diff))))
@@ -97,7 +99,7 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
       res <- rbind(res, data.frame(iter=ii, 
                                    cell_id=mycell,
                                    trainSet="cell",
-                                   trainLoss=cellModel$res$mean_train_losses[length(cellModel$res$mean_train_losses)],
+                                   trainAvgLoss=cellModel$mean_train_losses[length(cellModel$mean_train_losses)],
                                    testLoss=(mean(cellGrpSim$diff - mean(unlist(cellGrpSim$same)))/sd(cellGrpSim$diff)),
                                    testAvgLoss=mean((mean(cellGrpSim$diff) - sapply(cellGrpSim$same, mean))/sd(cellGrpSim$diff)), 
                                    testAURank=1 - mean(rankVectors(unlist(cellGrpSim$same), cellGrpSim$diff))))
@@ -105,7 +107,7 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
       res <- rbind(res, data.frame(iter=ii, 
                                    cell_id=mycell,
                                    trainSet="all",
-                                   trainLoss=allModel$res$mean_train_losses[length(allModel$res$mean_train_losses)],
+                                   trainAvgLoss=allModel$mean_train_losses[length(allModel$mean_train_losses)],
                                    testLoss=(mean(allGrpSim$diff - mean(unlist(allGrpSim$same)))/sd(allGrpSim$diff)),
                                    testAvgLoss=mean((mean(allGrpSim$diff) - sapply(allGrpSim$same, mean))/sd(allGrpSim$diff)), 
                                    testAURank=1 - mean(rankVectors(unlist(allGrpSim$same), allGrpSim$diff))))
