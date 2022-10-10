@@ -33,6 +33,12 @@ grpprts <- unique(siginfo$pert_iname[siginfo$cell_id %in% mycellids & siginfo$pe
 trainprts <- sample(grpprts, round(length(grpprts)/2))
 testprts <- setdiff(grpprts, trainprts)
 
+# Get cell lines of interest:
+mycelldf <- data.frame(cell_id = names(cellcount), 
+                       sigcount = cellcount[names(cellcount)], 
+                       pertcount = ucount[names(cellcount)], 
+                       cellinfo[match(names(cellcount), cellinfo$cell_id), c(14, 15, 16, 18)])
+
 
 # Test Cell Line Specificity
 

@@ -141,16 +141,21 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
 # Analyze Bray dataset
 analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10, saveModel=FALSE){
   epochs <- as.numeric(epochs)
-  brayds <- readRDS(braypath)
   
-  metax <- grep("Meta", colnames(brayds))
-  brayMeta <- brayds[, metax]
-  brayData <- as.matrix(brayds[, setdiff(seq(dim(brayds)[2]), metax)])
+  # brayds <- readRDS(braypath)
+  # 
+  # metax <- grep("Meta", colnames(brayds))
+  # brayMeta <- brayds[, metax]
+  # brayData <- as.matrix(brayds[, setdiff(seq(dim(brayds)[2]), metax)])
+  # 
+  # brayData <- scale(brayData, center=TRUE, scale=TRUE)
+  # # apparently some axes do not vary
+  # # Check for infinities
+  # brayData[is.na(brayData)] <- 0
   
-  brayData <- scale(brayData, center=TRUE, scale=TRUE)
-  # apparently some axes do not vary
-  # Check for infinities
-  brayData[is.na(brayData)] <- 0
+  brayds <- loadBradyData(braypath, center=1)
+  brayData <- brayds$ds
+  brayMeta <- brayds$metads
   
   if (method == "xval"){
     nFolds <- 3
@@ -222,7 +227,6 @@ analyzeNormCPData <- function(cppath, outpath=".", method="xval", epochs=10, dsn
 }
 
 
-
 ### Load Move to separate dataloaders file probs:
 loadBrayData <- function(braypath, center=1){
   
@@ -240,6 +244,12 @@ loadBrayData <- function(braypath, center=1){
     combDataNorm[is.na(combDataNorm)] <- 0
   }
   
+  # Assign controls unique pert_ids to make sure torch isn't grouping them, which could create massive memory hurdles  
+  # This doesn't seem to be working for some reason, revisit later
+  ix <- which(combMeta$Metadata_pert_type == "control")
+  combMeta$Metadata_pert_id[ix] <- sprintf("ctl_%d", seq_along(ix))
+  
+  #return(list(ds=combData[-ix,], metads=combMeta[-ix,]))
   return(list(ds=combData, metads=combMeta))
 }
 
