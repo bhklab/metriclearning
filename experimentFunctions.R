@@ -121,50 +121,22 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
 
 
 
-# if (cell_id == "all"){
-#   mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$pert_type == "trt_cp",]
-#   # This is a bit of a hack to get the learning approach to consider only same-cell line pairs
-#   mysigs$pert_iname <- sprintf("%s_%s", mysigs$pert_iname, mysigs$cell_id)
-#   
-#   # Mysigs has 196k unique pert+cell combinations. For expediency, sample:
-#   mysigs <- mysigs[mysigs$pert_iname %in% sample(unique(mysigs$pert_iname), 20000), ]
-#   
-#   ds <- parse_gctx(fname=get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=l1k_meta$siginfo$sig_id[l1k_meta$siginfo$pert_type == "trt_cp"])
-#   ds <- subset_gct(ds, cid=mysigs$sig_id)
-# } else {
-#   mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$cell_id == cell_id & l1k_meta$siginfo$pert_type == "trt_cp",]
-#   ds <- parse_gctx(fname=get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=mysigs$sig_id)
-# }
-
-
-
 # Analyze Bray dataset
-analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10, saveModel=FALSE){
+analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10, saveModel=TRUE, subsample=0.2){
   epochs <- as.numeric(epochs)
   
-  # brayds <- readRDS(braypath)
-  # 
-  # metax <- grep("Meta", colnames(brayds))
-  # brayMeta <- brayds[, metax]
-  # brayData <- as.matrix(brayds[, setdiff(seq(dim(brayds)[2]), metax)])
-  # 
-  # brayData <- scale(brayData, center=TRUE, scale=TRUE)
-  # # apparently some axes do not vary
-  # # Check for infinities
-  # brayData[is.na(brayData)] <- 0
-  
-  brayds <- loadBrayData(braypath, center=1)
+  brayds <- loadBrayData(braypath, center=1, subsample = subsample)
   brayData <- brayds$ds
   brayMeta <- brayds$metads
   
   if (method == "xval"){
     nFolds <- 3
     brayxval <- metricCrossValidate(brayData, brayMeta$Metadata_pert_id, nFolds=nFolds, epochs=epochs) 
-    saveRDS(brayxval$res_all, file=file.path(outpath, sprintf("brayxval_epch=%d_folds=%d.rds", epochs, nFolds)))
+    saveRDS(brayxval$res_all, file=file.path(outpath, sprintf("brayxval_epch=%d_smp=%d_folds=%d.rds", epochs, round(100*subsample), nFolds)))
     
     if (saveModel){
       for (ii in seq_along(brayxval$mymodels)){
-        torch_save(brayxval$mymodel[[ii]], file.path(outpath, sprintf("brayxval_epch=%d_folds=%d_model%d.pt", epochs, nFolds, ii)))
+        torch_save(brayxval$mymodel[[ii]], file.path(outpath, sprintf("brayxval_epch=%d_smp=%d_folds=%d_model%d.pt", epochs, round(100*subsample), nFolds, ii)))
       }
     }
     return(brayxval)
@@ -172,14 +144,14 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10, sav
   } else if (method == "allds"){
     braymetric <- learnInnerProduct(brayData, brayMeta$Metadata_pert_id, epochs=epochs)
     saveRDS(braymetric, file=file.path(outpath, sprintf("braymetric_epch=%d.rds", epochs)))
-    torch_save(braymetric$model, file.path(outpath, sprintf("braymetric_epch=%d_model.pt", epochs)))
+    torch_save(braymetric$model, file.path(outpath, sprintf("braymetric_epch=%d_smp=%d_model.pt", epochs, round(100*subsample))))
     return(braymetric)
     
   } else if (method == "ntraining"){
     # Study how decreasing the amount of training data affects outcomes
     
     res <- metricNTraining(brayData, brayMeta$Metadata_pert_id, epochs=epochs, reps=2)
-    saveRDS(res, file=file.path(outpath, sprintf("brayntraining_epch=%s.rds", epochs)))
+    saveRDS(res, file=file.path(outpath, sprintf("brayntraining_epch=%s_smp=%d.rds", epochs, round(100*subsample))))
     return(res)
   }
   
@@ -228,7 +200,7 @@ analyzeNormCPData <- function(cppath, outpath=".", method="xval", epochs=10, dsn
 
 
 ### Load Move to separate dataloaders file probs:
-loadBrayData <- function(braypath, center=1){
+loadBrayData <- function(braypath, center=1, subsample=1){
   
   combds <- readRDS(braypath)
   
@@ -249,7 +221,14 @@ loadBrayData <- function(braypath, center=1){
   ix <- which(combMeta$Metadata_pert_type == "control")
   combMeta$Metadata_pert_id[ix] <- sprintf("ctl_%d", seq_along(ix))
   
-  #return(list(ds=combData[-ix,], metads=combMeta[-ix,]))
+  if (subsample < 1 & subsample > 0){
+    perts <- sample(unique(combMeta$Metadata_pert_id), round(length(unique(combMeta$Metadata_pert_id))*subsample))
+    jx <- which(combMeta$Metadata_pert_id %in% perts)
+    
+    combData <- combData[jx, ]
+    combMeta <- combMeta[jx, ]
+  }  
+  
   return(list(ds=combData, metads=combMeta))
 }
 
