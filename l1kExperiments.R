@@ -1,4 +1,8 @@
-
+### l1KExperiments.R
+# This file consists of a set of scripted experiments I ran on the L1000 data
+# chiefly to stress test and evaluate the functionality in experimentFunctions.R before
+# deploying those functions in an HPC environment. The scripts here are not
+# intended as standalone analysis.
 
 
 # test metricNTraining
@@ -115,4 +119,9 @@ dev.off()
 
 # Debugging
 res <- analyzeL1KData(datapath, datapath, cell_id="all", outpath=".", method="ntraining", epochs=1)
+
+
+
+
+
   

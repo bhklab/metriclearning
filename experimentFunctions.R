@@ -283,3 +283,95 @@ loadLincsData <- function(lincspath, samplecp=0, splitGrps=1){
   
   return(list(ds=cpData, metads=cpMeta))
 }
+
+
+
+analyzePermutedL1KData <- function(dspath, metapath, cell_id, outpath=".", method="xvalscram", epochs=10, saveModel=TRUE){
+  l1k_meta <- read_l1k_meta(metapath, version=2020)
+  
+  if (cell_id == "all"){
+    mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$pert_type == "trt_cp",]
+    # This is a bit of a hack to get the learning approach to consider only same-cell line pairs
+    mysigs$pert_iname <- sprintf("%s_%s", mysigs$pert_iname, mysigs$cell_id)
+    
+    # Mysigs has 196k unique pert+cell combinations. For expediency, sample:
+    mysigs <- mysigs[mysigs$pert_iname %in% sample(unique(mysigs$pert_iname), 20000), ]
+    
+    ds <- parse_gctx(fname=get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=l1k_meta$siginfo$sig_id[l1k_meta$siginfo$pert_type == "trt_cp"])
+    ds <- subset_gct(ds, cid=mysigs$sig_id)
+  } else {
+    mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$cell_id == cell_id & l1k_meta$siginfo$pert_type == "trt_cp",]
+    ds <- parse_gctx(fname=get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=mysigs$sig_id)
+  }
+  
+  print(sprintf("DS dimensions: %d x %d", dim(ds@mat)[1], dim(ds@mat)[2]))
+  
+  if (method == "xvalscram"){
+    nFolds <- 3
+    
+    L1Kxval <- PermutedCrossValidate(t(ds@mat), mysigs$pert_iname, nFolds=nFolds, epochs=epochs)
+    
+    # Save the result
+    saveRDS(L1Kxval$res_all, file=file.path(outpath, sprintf("L1Kxval_epch=%s_folds=%s_cell=%s.rds", epochs, nFolds, cell_id)))
+    
+    if(saveModel){
+      for (ii in seq_along(L1Kxval$mymodels)){
+        torch_save(L1Kxval$mymodel[[ii]], file.path(outpath, sprintf("L1Kxval_epch=%s_folds=%s_cell=%s_model%d.pt", epochs, nFolds, cell_id, ii)))
+      }
+    }
+    
+    return(L1Kxval)
+  }
+}
+
+PermutedCrossValidate <- function(mat1, classes, nFolds=5, metric="", epochs=100, loss=mycos_t_loss){
+  # Revise to intelligently choose folds in the case of a wide range of class sizes
+  # But for now, do it naively
+  
+  mygroups <- table(classes)
+  myfolds <- createFolds(names(mygroups), k=nFolds)
+  myfolds <- sapply(myfolds, FUN=function(x) names(mygroups[x]))
+  
+  res_all <- list(myfolds=myfolds)
+  mymodels <- list()
+  
+  for (testset in myfolds){
+    testix <- which(classes %in% testset)
+    trainix <- setdiff(seq_along(classes), testix)
+    
+    print("Permuting Training Labels")
+    scrambledClasses <- sample(classes[trainix])
+    
+    gends_train <- genDataset(mat1[trainix,], scrambledClasses, pca_first = FALSE, scale = FALSE, center = FALSE)
+    train_dl <- dataloader(gends_train, batch_size = 1, shuffle = TRUE)
+    
+    gends_valid <- genDataset(mat1[testix,], classes[testix], pca_first=FALSE, scale=FALSE, center=FALSE)
+    valid_dl <- dataloader(gends_valid, batch_size = 1, shuffle = TRUE)
+    
+    model <- OneLayerLinear(dim(mat1)[2], dim(mat1)[2])
+    device <- if (cuda_is_available()) torch_device("cuda:0") else "cpu"
+    model <- model$to(device = device)
+    optimizer <- optim_adam(model$parameters, lr = 0.01)
+    
+    res <- train_function(model=model, 
+                          train_dl=train_dl, 
+                          valid_dl=valid_dl, 
+                          myloss=loss, 
+                          device=device, 
+                          optimizer=optimizer, 
+                          epochs = epochs)
+    
+    print("Computing baseline sim")
+    trainGrpSim <- innerProductGroups("cosine", mat1[trainix,], scrambledClasses, compact=1)
+    validGrpSim <- innerProductGroups("cosine", mat1[testix,], classes[testix], compact=1)
+    
+    res$baseline_train_loss <- mean((mean(trainGrpSim$diff) - sapply(trainGrpSim$same, mean))/sd(trainGrpSim$diff))
+    res$baseline_valid_loss <- mean((mean(validGrpSim$diff) - sapply(validGrpSim$same, mean))/sd(validGrpSim$diff))
+    
+    # Separate the final model from each fold to save the results
+    res_all[sprintf("fold%d", length(res_all))] <- list(res[names(res) != "model"])
+    mymodels <- c(mymodels, res$model)
+  }
+  
+  return(list(res_all=res_all, mymodels=mymodels))
+}
