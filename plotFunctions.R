@@ -61,6 +61,14 @@ makeXValPlots <- function(xvalResPath, saveFiles=1, fname="XValRes", mytitle="My
   dev.off()
 }
 
+getXValBalRank <- function(xvalResPath, saveFiles=1, fname="XValRes", datapath=".",){
+  
+}
 
 
-#### Plot functions for 
+
+#### Plot functions for all datasets:
+
+makeAllPlots <- function(allrespath, saveFiles=1, fname="allres", mytitle="MyData", outpath="."){
+  
+}

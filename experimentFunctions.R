@@ -119,11 +119,17 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
 }
 
 
+# Apply models to replicate and PCL prediction
+benchMarkL1KCellModel <- function(modelpath, dspath, metapath, cell_id, outpath=".", modelname=""){
+  
+  
+}
 
 
 # Analyze Bray dataset
 analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10, saveModel=TRUE, subsample=0.2){
   epochs <- as.numeric(epochs)
+  subsample <- as.numeric(subsample)
   
   brayds <- loadBrayData(braypath, center=1, subsample = subsample)
   brayData <- brayds$ds
@@ -199,7 +205,7 @@ analyzeNormCPData <- function(cppath, outpath=".", method="xval", epochs=10, dsn
 }
 
 
-### Load Move to separate dataloaders file probs:
+### Load Bray Data; Move to separate dataloaders file probs:
 loadBrayData <- function(braypath, center=1, subsample=1){
   
   combds <- readRDS(braypath)
