@@ -153,7 +153,7 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10, sav
   # # Check for infinities
   # brayData[is.na(brayData)] <- 0
   
-  brayds <- loadBradyData(braypath, center=1)
+  brayds <- loadBrayData(braypath, center=1)
   brayData <- brayds$ds
   brayMeta <- brayds$metads
   
