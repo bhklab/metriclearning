@@ -120,9 +120,103 @@ analyzeL1KCellLineSpecificity <- function(dspath, metapath, cell_ids=c("HEPG2", 
 
 
 # Apply models to replicate and PCL prediction
-benchMarkL1KCellModel <- function(modelpath, dspath, metapath, cell_id, outpath=".", modelname=""){
+benchmarkL1KCellModel <- function(modelpath, dspath, metapath, pclpath, cell_id, outpath=".", modelname="mymodel", mkplots=1){
+  pclds <- readRDS(pclpath)
+  model <- torch_load(modelpath)
+  pertnames <- unlist(pclds$pertnames)
   
+  # Read appropriate data
+  # Refactoring, I could make this a function like loadL1KData:
+  l1k_meta <- read_l1k_meta(metapath, version=2020)
   
+  if (cell_id == "all"){
+    mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$pert_type == "trt_cp",]
+    # This is a bit of a hack to get the learning approach to consider only same-cell line pairs
+    mysigs <- mysigs[sample(seq_len(dim(mysigs)[1]), 15000)]
+    ds <- parse_gctx(fname=get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=l1k_meta$siginfo$sig_id[l1k_meta$siginfo$pert_type == "trt_cp"])
+    ds <- subset_gct(ds, cid=mysigs$sig_id)
+  } else {
+    mysigs <- l1k_meta$siginfo[l1k_meta$siginfo$cell_id == cell_id & l1k_meta$siginfo$pert_type == "trt_cp",]
+    
+    if ((dim(mysigs)[1]) > 10000){
+      pclCount <- sum(mysigs$pert_iname %in% pertnames)
+      ax <- which(mysigs$pert_iname %in% pertnames)
+      bx <- sample(setdiff(seq_len(dim(mysigs)[1]), ax), pclCount)
+      mysigs <- rbind(mysigs[ax, ], mysigs[bx,])
+    }
+    ds <- parse_gctx(fname=get_level5_ds(dspath), rid=l1k_meta$landmarks$pr_gene_id, cid=mysigs$sig_id)
+  }
+  
+  cossim <- innerProduct("cosine", t(ds@mat), t(ds@mat))
+  MLsim <- innerProduct(model, t(ds@mat), t(ds@mat))
+  
+  # For each PCL, compute the similarity within different compounds in each PCL
+  
+  MLSims <- list()
+  cosSims <- list()
+  
+  for (ii in seq_along(pclds$pertnames)){
+    pclcpds <- pclds$pertnames[[ii]]
+    ix <- which(mysigs$pert_iname %in% pclcpds)
+    
+    # Identify PCL members that are different compounds
+    filt <- outer(mysigs$pert_iname[ix], mysigs$pert_iname[ix], '!=')
+    filt <- filt[upper.tri(filt)]
+    
+    if (sum(filt) > 1){
+      pclMLSim <- MLsim[ix,ix]
+      pclCosSim  <- cossim[ix,ix]
+      MLSims[[pclds$pcldf$pclid[ii]]] <- (pclMLSim[upper.tri(pclMLSim)])[filt]
+      cosSims[[pclds$pcldf$pclid[ii]]] <- (pclCosSim[upper.tri(pclCosSim)])[filt]
+    }
+  }
+  
+  cosbg <- sample(cossim[upper.tri(cossim)], 1e6)
+  MLbg <- sample(MLsim[upper.tri(MLsim)], 1e6)
+  
+  MLranks <- listify(MLSims, rankVectors(unlist(MLSims), MLbg))
+  cosranks <- listify(cosSims, rankVectors(unlist(cosSims), cosbg))
+
+  retdf <- list(modelname=modelname, MLSims=MLSims, cosSims=cosSims, MLRanks=MLranks, cosranks=cosranks, MLbg=MLbg, cosbg=cosbg)
+  saveRDS(retdf, file.path(outpath, sprintf("%s_pcl_res.rds", modelname)))
+  
+  if (mkplots){
+    pdf(file=file.path(outpath, sprintf("%s_pcl_figs.pdf", modelname)), width=8, height=6)
+    # ML density
+    plot(density(MLsim[upper.tri(MLsim)], bw=0.01), col="blue", xlim=c(-1,1), xlab="Metric Learning similarity", lwd=2, main=modelname)
+    lines(density(unlist(MLSims), bw=0.01), col="red", lwd=2)
+    legend(x="topright", legend=c("PCL pairs", "All pairs"), lwd=c(4,4), col=c("red", "blue"))
+    
+    # Cos Density
+    plot(density(cossim[upper.tri(cossim)], bw=0.01), col="purple", xlim=c(-1,1), xlab="Cosine similarity", lwd=2, main=modelname)
+    lines(density(unlist(cosSims), bw=0.01), col="forestgreen", lwd=2)
+    legend(x="topright", legend=c("PCL pairs", "All pairs"), lwd=c(4,4), col=c("purple", "forestgreen"))
+    
+    # Rank plot - unbalanced
+    plot(ecdf(unlist(MLranks)), col="red", lwd=2, xlim=c(0,1), xlab="Rank relative to background", ylab="Cumulative Density", main=modelname)
+    lines(ecdf(unlist(cosranks)), col="forestgreen", lwd=2)
+    lines(c(0,1), c(0,1), col="black", lwd=1, lty=2)
+    legend(x="bottomright", legend=c(sprintf("Metric Learning: %0.3f", 1-mean(unlist(MLranks))), 
+                                     sprintf("Cosine: %0.3f", 1-mean(unlist(cosranks)))), col=c("red", "forestgreen"), lwd=c(4,4))
+    
+    # Rank plot - balanced
+    MLBalRanks <- unlist(sapply(MLranks, FUN=function(x) sample(x, min(200, length(x)))))
+    cosBalRanks <- unlist(sapply(cosranks, FUN=function(x) sample(x, min(200, length(x)))))
+    
+    plot(ecdf(MLBalRanks), col="red", lwd=2, xlim=c(0,1), 
+         xlab="Balanced Rank relative to background", ylab="Cumulative Density", main=modelname)
+    lines(ecdf(cosBalRanks), col="forestgreen", lwd=2)
+    lines(c(0,1), c(0,1), col="black", lwd=1, lty=2)
+    legend(x="bottomright", legend=c(sprintf("Metric Learning: %0.3f", 1-mean(unlist(MLBalRanks))), 
+                                     sprintf("Cosine: %0.3f", 1-mean(unlist(cosBalRanks)))), col=c("red", "forestgreen"), lwd=c(4,4))
+    
+    # Maybe add Z-scores
+    dev.off()
+
+  }
+  
+  return(retdf)
+  print("End of benchmark")
 }
 
 
@@ -217,9 +311,9 @@ loadBrayData <- function(braypath, center=1, subsample=1){
   combData <- as.matrix(combds[, setdiff(seq(dim(combds)[2]), metax)])
   
   if (center){
-    combDataNorm <- scale(combData, center=TRUE, scale=TRUE)
+    combData <- scale(combData, center=TRUE, scale=TRUE)
     # apparently some axes do not vary
-    combDataNorm[is.na(combDataNorm)] <- 0
+    combData[is.na(combData)] <- 0
   }
   
   # Assign controls unique pert_ids to make sure torch isn't grouping them, which could create massive memory hurdles  
@@ -360,3 +454,22 @@ PermutedCrossValidate <- function(mat1, classes, nFolds=5, metric="", epochs=100
   
   return(list(res_all=res_all, mymodels=mymodels))
 }
+
+
+# Takes a vector and a list and maps the vector into the same structure as the list
+# equivalent to relisting and unlisted list.
+listify <- function(mylist, myvec){
+  mylengths <- sapply(mylist, length)
+  mynames <- names(mylist)
+  
+  newlist <- list()
+  # Need to vectorize, but for the lists of interest, this is not costly
+  ix <- 1
+  for (ii in seq_along(mylist)){
+    newlist[[mynames[ii]]] <- myvec[ix:(ix + mylengths[ii]-1)]
+    ix <- ix + mylengths[ii]
+  }
+  names(newlist) <- mynames
+  return(newlist)
+}
+

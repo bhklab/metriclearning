@@ -5,6 +5,20 @@
 # intended as standalone analysis.
 
 
+# Configure the PCL info:
+pclfile <- "~/Work/code/metriclearning/data/pcl_info.txt"
+pclinfo <- read.table(pclfile, sep="\t", header=TRUE, stringsAsFactors=FALSE)
+
+pclperts <- strsplit(pclinfo$Perturbagen.IDs, split="|", fixed = TRUE)
+pclnames <- strsplit(pclinfo$Pertubagen.Names, split="|", fixed = TRUE)
+ix <- which(pclinfo$Type == "CP")
+pcldf <- data.frame(pclid=pclinfo$PCL.ID[ix], pclname=pclinfo$PCL.Name[ix], type=pclinfo$Type[ix], 
+                    size=pclinfo$Size[ix])
+pclds <- list(pcldf=pcldf, pertids=pclperts[ix], pertnames=pclnames[ix])
+saveRDS(pclds, file="~/Work/code/metriclearning/data/pclds.rds")
+
+
+
 # test metricNTraining
 datapath <- "~/Work/bhk/data/l1k/2020/"
 outpath <- "~/Work/bhk/analysis/metric_learning/2022_L1K/figs"
@@ -119,6 +133,39 @@ dev.off()
 
 # Debugging
 res <- analyzeL1KData(datapath, datapath, cell_id="all", outpath=".", method="ntraining", epochs=1)
+
+
+
+# Get PCL data:
+pclpath <- "~/Work/code/metriclearning/data/pclds.rds"
+datapath <- "~/Work/bhk/data/l1k/2020/"
+setwd("/Users/iansmith/Work/bhk/analysis/metric_learning/2022_L1K/modelRuns/models")
+f <- list.files(pattern="L1Kmetric")
+f <- f[-grep('JURKAT', f)]
+
+for (myf in f){
+
+  mycell <- strsplit(strsplit(myf, "_model", fixed=TRUE)[[1]][1], "cell=", fixed=TRUE)[[1]][2]
+  print(sprintf("%s, %s", myf, mycell))
+  a <- benchmarkL1K_PCLs(myf, datapath, datapath, pclpath, cell_id=mycell, outpath="../PCLFigs", sprintf("%s_PCL", mycell))
+}
+
+# Exclude MCF7
+extraModels <- intersect(list.files(pattern="L1Kxval_epch=10"), list.files(pattern="model1.pt"))[c(1,2,4)]
+
+for (myf in extraModels){
+  mycell <- strsplit(strsplit(myf, "_model", fixed=TRUE)[[1]][1], "cell=", fixed=TRUE)[[1]][2]
+  print(sprintf("%s, %s", myf, mycell))
+  a <- benchmarkL1K_PCLs(myf, datapath, datapath, pclpath, cell_id=mycell, outpath="../PCLFigs", sprintf("%s_PCL", mycell))
+}
+
+mycells <- c("MCF7", "ASC", "BT20", "HCC515", "HEK293", "HEPG2", "HUVEC", "NPC", "A375", "A549", "PC3")
+for (mycell in mycells){
+  print(mycell)
+  a <- benchmarkL1K_PCLs("L1Kmetric_epch=10_cell=all_model.pt", datapath, datapath, pclpath, cell_id=mycell, outpath="../PCLFigs", sprintf("all_%s_PCL", mycell))
+}
+  
+
 
 
 

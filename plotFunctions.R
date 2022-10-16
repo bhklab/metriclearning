@@ -6,18 +6,19 @@ makeNTrainingPlots <- function(ntrainingResPath, saveFiles=1, fname="myNTraining
   
   if (saveFiles){
     pdf(file.path(outpath, sprintf("%s_LossVsTrainingSize.pdf", fname)), width=9, height=7)
-    plot(log2(res$trainClasses+1 ), res$trainLoss, pch=16, col=alpha("blue",0.6), xlab="Log2 Number of Training Compounds + 1", ylab="T Loss", 
-         main=sprintf("%s Training and Validation Loss vs Number of Training Compounds", mytitle), 
+    plot(log2(res$trainClasses+1 ), res$trainLoss, pch=18, cex=2, col=alpha("blue",0.8), xlab="Log2 Number of Training Compounds + 1", ylab="T Loss", 
+         main=sprintf("%s Training and Testing Loss vs Number of Training Compounds", mytitle), 
          ylim=c(min(c(res$trainLoss, res$validLoss)), max(c(res$trainLoss, res$validLoss))))
-    points(log2(res$trainClasses+1), res$validLoss, pch=16, col=alpha("red",0.6))
-    legend(x="bottomright", legend=c("Training Loss", "Validation Loss"), pch=16, col=c("blue", "red"))
+    points(log2(res$trainClasses+1), res$validLoss, pch=18, col=alpha("red",0.8), cex=2)
+    legend(x="bottomright", legend=c("Training Loss", "Testing Loss"), pch=16, col=c("blue", "red"))
     lines(x=c(-10, 1000), y=c(mean(res$validLoss[res$trainClasses == 0]), mean(res$validLoss[res$trainClasses == 0])), col="black", lty=2)
     dev.off()
     
     pdf(file.path(outpath, sprintf("%s_AURankVsTrainingSize.pdf", fname)), width=9, height=7)
-    plot(log2(res$trainClasses + 1), res$validAURank, pch=16, col=alpha("red", 0.6), xlab="Log2 Number of Training Compounds+1", ylab="AU Rank",
-         main=sprintf("%s Validation AU Rank vs Number of Training Compounds", mytitle))
+    plot(log2(res$trainClasses + 1), res$validAURank, pch=18, cex=2, col=alpha("red", 0.9), xlab="Log2 Number of Training Compounds+1", ylab="AU Rank",
+         main=sprintf("%s Validation AU Rank vs Number of Training Compounds", mytitle), ylim=c(0.7, 1))
     lines(x=c(-10, 1000), y=c(mean(res$validAURank[res$trainClasses == 0]), mean(res$validAURank[res$trainClasses == 0])), col="black", lty=2)
+    legend(x="bottomright", legend=c("Testing AURank"), pch=18, col="red")
     dev.off()
   } else {
     
@@ -61,7 +62,9 @@ makeXValPlots <- function(xvalResPath, saveFiles=1, fname="XValRes", mytitle="My
   dev.off()
 }
 
-getXValBalRank <- function(xvalResPath, saveFiles=1, fname="XValRes", datapath=".",){
+
+
+getXValBalRank <- function(xvalResPath, saveFiles=1, fname="XValRes", datapath="."){
   
 }
 
