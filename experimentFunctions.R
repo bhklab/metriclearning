@@ -243,7 +243,7 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10, sav
     
   } else if (method == "allds"){
     braymetric <- learnInnerProduct(brayData, brayMeta$Metadata_pert_id, epochs=epochs)
-    saveRDS(braymetric, file=file.path(outpath, sprintf("braymetric_epch=%d.rds", epochs)))
+    saveRDS(braymetric, file=file.path(outpath, sprintf("braymetric_epch=%d_smp=%d.rds", epochs, round(100*subsample))))
     torch_save(braymetric$model, file.path(outpath, sprintf("braymetric_epch=%d_smp=%d_model.pt", epochs, round(100*subsample))))
     return(braymetric)
     
@@ -254,7 +254,41 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10, sav
     saveRDS(res, file=file.path(outpath, sprintf("brayntraining_epch=%s_smp=%d.rds", epochs, round(100*subsample))))
     return(res)
   }
+}
+
+analyzeLincsCPData <- function(lincspath, outpath=".", method="xval", epochs=10, saveModel=TRUE, dsname="dsA"){
+  epochs <- as.numeric(epochs)
+  subsample <- as.numeric(subsample)
   
+  lincsds <- loadLincsData(lincspath, splitGrps = 1)
+  lincsData <- lincsds$ds
+  lincsMeta <- lincsds$metads
+  
+  if (method == "xval"){
+    nFolds <- 3
+    lincsxval <- metricCrossValidate(lincsData, lincsMeta$Metadata_pert_iname, nFolds=nFolds, epochs=epochs) 
+    saveRDS(lincsxval$res_all, file=file.path(outpath, sprintf("lincsxval_%s_epch=%d_smp=%d_folds=%d.rds", dsname, epochs, round(100*subsample), nFolds)))
+    
+    if (saveModel){
+      for (ii in seq_along(lincsxval$mymodels)){
+        torch_save(lincsxval$mymodel[[ii]], file.path(outpath, sprintf("lincsxval_%s_epch=%d_smp=%d_folds=%d_model%d.pt", dsname, epochs, round(100*subsample), nFolds, ii)))
+      }
+    }
+    return(lincsxval)
+    
+  } else if (method == "allds"){
+    lincsmetric <- learnInnerProduct(lincsData, lincsMeta$Metadata_pert_iname, epochs=epochs)
+    saveRDS(lincsmetric, file=file.path(outpath, sprintf("lincsmetric_%s_epch=%d.rds", dsname, epochs)))
+    torch_save(lincsmetric$model, file.path(outpath, sprintf("lincsmetric_%s_epch=%d_smp=%d_model.pt", dsname, epochs, round(100*subsample))))
+    return(lincsmetric)
+    
+  } else if (method == "ntraining"){
+    # Study how decreasing the amount of training data affects outcomes
+    
+    res <- metricNTraining(lincsData, lincsMeta$Metadata_pert_iname, epochs=epochs, reps=2)
+    saveRDS(res, file=file.path(outpath, sprintf("lincsntraining_%s_epch=%s_smp=%d.rds", dsname, epochs, round(100*subsample))))
+    return(res)
+  }
 }
 
 
@@ -352,7 +386,9 @@ loadLincsData <- function(lincspath, samplecp=0, splitGrps=1){
     
     for (mycp in bigCPs){
       ixgrps <- ceiling(sample(sum(cpMeta$Metadata_pert_iname == mycp))/60)
+      cpMeta$Metadata_pert_id[cpMeta$Metadata_pert_iname == mycp] <- sprintf("%s_%d", cpMeta$Metadata_pert_id[cpMeta$Metadata_pert_iname == mycp], ixgrps)
       cpMeta$Metadata_pert_iname[cpMeta$Metadata_pert_iname == mycp] <- sprintf("%s_%d", mycp, ixgrps)
+      
     }
   }
   
