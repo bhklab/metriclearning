@@ -198,6 +198,65 @@ innerProductGroups <- function(model, mat1, classes, compact=0){
   }
 }
 
+
+#' innerProductPairwiseGroups
+#' 
+#' This function takes a model, a data matrix, group labels, and sets of group labels as input and 
+#' computes the similarity between signatures (rows) in the matrix that belong to the same set of group
+#' labels but have different group labels. The use case is that there are sets of groups that are similar (e.g. 
+#' compounds with the same mechanism of action), and we seek the similarities of elements of the same set that
+#' have different group labels. 
+
+innerProductPairwiseGroups <- function(model, mat1, classes, sets, compact=0){
+  # Compact samples a block from the full similarity matrix, which can be efficient if mat1 is very large.
+  # Note that compact does not exclude same elements, i.e. it is null distribution that includes both 
+  # similarities where the null hypothesis and where the alternate hypothesis is true. The presumption is that 
+  # the rate of instances of the alternate hypothesis is sufficiently low that this isn't a problem. 
+  if (compact){
+    if (dim(mat1)[1] < 4000){
+      sims <- innerProduct(model, mat1, mat1)
+    } else {
+      ix <- sample(dim(mat1)[1], 4000)
+      sims <- innerProduct(model, mat1[ix,], mat1[ix,])
+    }
+    
+    # Consider filtering same-groups and same-sets elements here
+    
+  } else {
+    sims <- innerProduct(model, mat1, mat1)
+    
+    # Consider filtering same-groups and same-sets elements here
+  }
+  
+  sims <- sims[upper.tri(sims)]
+    
+  setSims <- list()
+  
+  for (ii in length(sets)){
+    myset <- sets[[ii]]
+    # Check how many elements of classes are in my set. We require at least two:
+    mygrps <- intersect(classes, myset)
+    
+    if (length(mygrps) > 1){
+      jx <- which(classes %in% myset)
+      
+      # Only include elements whose group labels are not equal
+      filt <- outer(classes[jx], classes[jx], '!=')
+      filt <- filt[upper.tri(filt)]
+      
+      mysim <- innerProduct(model, mat1[jx,], mat1[jx,])
+      setSims[[ii]] <- (mysim[upper.tri(mysim)])[filt]
+    }
+  }
+  
+  if (!is.null(names(sets))){
+    names(setSims) <- names(sets)
+  }
+  
+  return(setSims=setSims, allSims=sims)
+}
+
+
 #' metricNTraining
 #' 
 #' This function takes a dataset, partitions it into a 20% test set and 80% train set, then learns a similarity
