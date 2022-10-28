@@ -265,7 +265,7 @@ analyzeLincsCPData <- function(lincspath, outpath=".", method="xval", epochs=10,
   lincsMeta <- lincsds$metads
   
   if (method == "xval"){
-    nFolds <- 3
+    nFolds <- 5
     lincsxval <- metricCrossValidate(lincsData, lincsMeta$Metadata_pert_iname, nFolds=nFolds, epochs=epochs) 
     saveRDS(lincsxval$res_all, file=file.path(outpath, sprintf("lincsxval_%s_epch=%d_smp=%d_folds=%d.rds", dsname, epochs, round(100*subsample), nFolds)))
     
@@ -367,7 +367,7 @@ loadBrayData <- function(braypath, center=1, subsample=1){
 }
 
 
-loadLincsData <- function(lincspath, samplecp=0, splitGrps=1){
+loadLincsData <- function(lincspath, samplecp=0, splitGrps=1, byCell=1){
   
   cpds <- readRDS(lincspath)
   
@@ -376,6 +376,14 @@ loadLincsData <- function(lincspath, samplecp=0, splitGrps=1){
   cpData <- as.matrix(cpds[, -metax])
   
   cpMeta$Metadata_pert_iname[cpMeta$Metadata_pert_iname == ""] <- "empty"
+  
+  # Some of the LINCS datasets have multiple cell lines. This must be encoded in the pert identifiers to train by cell:
+  if (byCell == 1){
+    if (length(unique(cpMeta$Metadata_cell_id)) > 1){
+      cpMeta$Metadata_pert_iname <- sprintf("%s_%s", cpMeta$Metadata_pert_iname, cpMeta$Metadata_cell_id)
+      cpMeta$Metadata_pert_id <- sprintf("%s_%s", cpMeta$Metadata_pert_id, cpMeta$Metadata_cell_id)
+    }
+  }
   
   # There are a large number of posiive and negative controls. To help with training, I break them up
   # into groups of 60, which is the largest set of compounds apart from the main compounds
@@ -391,6 +399,8 @@ loadLincsData <- function(lincspath, samplecp=0, splitGrps=1){
       
     }
   }
+  
+  
   
   #if (samplecp > 0){
   #  cpcounts <- table(cpMeta$Metadata_pert_iname)
