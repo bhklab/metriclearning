@@ -144,7 +144,6 @@ f <- list.files(pattern="L1Kmetric")
 f <- f[-grep('JURKAT', f)]
 
 for (myf in f){
-
   mycell <- strsplit(strsplit(myf, "_model", fixed=TRUE)[[1]][1], "cell=", fixed=TRUE)[[1]][2]
   print(sprintf("%s, %s", myf, mycell))
   a <- benchmarkL1K_PCLs(myf, datapath, datapath, pclpath, cell_id=mycell, outpath="../PCLFigs", sprintf("%s_PCL", mycell))

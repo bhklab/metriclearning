@@ -1,6 +1,9 @@
 library(gridExtra)
 library(ggplot2)
 
+### This is a script to generate figures for the manuscript.
+
+
 
 outdir <- "./figspaper"
 
@@ -354,3 +357,104 @@ subds <- brayds$ds[brayds$metads$Metadata_pert_id %in% mycps | brayds$metads$Met
 submeta <- brayds$metads[brayds$metads$Metadata_pert_id %in% mycps | brayds$metads$Metadata_broad_sample_type == "control",]
 
 
+
+######### Cell Painting Figures, Shantanu Meeting
+cpdir <- "~/Work/bhk/analysis/metric_learning/2022_cellpaint/"
+outdir <- file.path(cpdir, "bray")
+
+brayds <- loadBrayData(file.path(topdir, "bray_2017_combined_profiles.rds"))
+model1 <- torch_load(file.path(cpdir, "models", "brayxval_epch=5_smp=50_folds=3_model1.pt"))
+
+pclds <- readRDS("~/Work/code/metriclearning/data/pclds.rds")
+
+
+# Plot replicate similarities, ranks
+ix <- sample(dim(brayds$ds)[1], 2000)
+
+bgcos <- innerProduct("cosine", brayds$ds[ix,], brayds$ds[ix,])
+bgcos <- bgcos[upper.tri(bgcos)]
+bgsim <- innerProduct(model1, brayds$ds[ix,], brayds$ds[ix,])
+bgsim <- bgsim[upper.tri(bgsim)]
+
+cosperts <- list()
+simperts <- list()
+
+for (mypert in unique(brayds$metads$Metadata_pert_id[brayds$metads$Metadata_pert_type == "trt"])[1:5000]){
+  if (length(cosperts) %% 100 == 0){print(length(cosperts))}
+  jx <- which(brayds$metads$Metadata_pert_id == mypert)
+  
+  pertcos <- innerProduct("cosine", brayds$ds[jx, ], brayds$ds[jx,])
+  pertsim <- innerProduct(model1, brayds$ds[jx, ], brayds$ds[jx,])
+  cosperts[[mypert]] <- pertcos[upper.tri(pertcos)]
+  simperts[[mypert]] <- pertsim[upper.tri(pertsim)]
+}
+
+pdf(file.path(outdir, "bray_cosine_replisim.pdf"), width=10, height=8)
+plot(density(bgcos, bw=0.01), col="purple", lwd=2, xlim=c(-1,1), xlab="Cosine Similarity", ylab="Density", main="Bray Cosine Replicate similarity", ylim=c(0, 1.5))
+lines(density(unlist(cosperts), bw=0.01), col="forestgreen", lwd=2)
+legend(x="topleft", legend=c("All signatures", "Replicates"), col=c("purple", "forestgreen"), lwd=c(4,4))
+dev.off()
+
+pdf(file.path(outdir, "bray_learnedMetric_replisim_epch=5_smp=50_folds=3_mdl1.pdf"), width=10, height=8)
+plot(density(bgsim, bw=0.01), col="blue", lwd=2, xlim=c(-1,1), xlab="Learned Metric", ylab="Density", main="Bray Learned Metric replicate similarity")
+lines(density(unlist(simperts), bw=0.01), col="red", lwd=2)
+legend(x="topleft", legend=c("All signatures", "Replicates"), col=c("blue", "red"), lwd=c(4,4))
+dev.off()
+
+rankcos <- rankVectors(unlist(cosperts), bgcos)
+ranksim <- rankVectors(unlist(simperts), bgsim)
+
+pdf(file.path(outdir, "bray_ReplicateRanks.pdf"), width=10, height=8)
+plot(ecdf(ranksim), col="red", lwd=3, xlab=c("Replicate Rank"), ylab="Cumulative Density", xlim=c(0,1), main="Replicate Ranks on Bray dataset")
+lines(ecdf(rankcos), col="blue", lwd=3)
+legend(x="bottomright", legend=c(sprintf("Learned Metric = %0.3f", 1-mean(ranksim)), sprintf("Cosine = %0.3f", 1-mean(rankcos))), col=c("red", "blue"), lwd=c(4,4))
+dev.off()
+
+
+
+# PCLs
+
+pclcos <- list()
+pclsim <- list()
+
+for (ii in seq(dim(pclds$pcldf)[1])){
+  mypcl <- pclds$pcldf$pclid[ii]
+  pclperts <- pclds$pertids[[ii]]
+  
+  brayperts <- intersect(brayds$metads$Metadata_pert_id, pclperts)
+  
+  if (length(brayperts > 1)){
+    print(sprintf("%d: %s", ii, mypcl))
+    jx <- which(brayds$metads$Metadata_pert_id %in% brayperts)
+    
+    filt <- outer(brayds$metads$Metadata_pert_id[jx], brayds$metads$Metadata_pert_id[jx], '!=')
+    filt <- filt[upper.tri(filt)]
+    
+    pcos <- innerProduct("cosine", brayds$ds[jx, ], brayds$ds[jx,])
+    psim <- innerProduct(model1, brayds$ds[jx, ], brayds$ds[jx,])
+    
+    pclcos[[mypcl]] <- (pcos[upper.tri(pcos)])[filt]
+    pclsim[[mypcl]] <- (psim[upper.tri(psim)])[filt]
+  }
+}
+
+pdf(file.path(outdir, "bray_cosine_pclsim.pdf"), width=10, height=8)
+plot(density(unlist(pclcos), bw=0.01), col="forestgreen", lwd=2, xlim=c(-1,1), xlab="Cosine Similarity", ylab="Density", main="Bray Cosine PCL Similarity", ylim=c(0,1.5))
+lines(density(bgcos, bw=0.01), col="purple", lwd=2)
+legend(x="topleft", legend=c("All signatures", "Same PCL"), col=c("purple", "forestgreen"), lwd=c(4,4))
+dev.off()
+
+pdf(file.path(outdir, "bray_learnedMetric_pclsim_epch=5_smp=50_folds=3_mdl1.pdf"), width=10, height=8)
+plot(density(unlist(pclsim), bw=0.01), col="red", lwd=2, xlim=c(-1,1), xlab="Learned Metric", ylab="Density", main="Bray Learned Metric PCL similarity", ylim=c(0,4))
+lines(density(bgsim, bw=0.01), col="blue", lwd=2)
+legend(x="topleft", legend=c("All signatures", "Same PCL"), col=c("blue", "red"), lwd=c(4,4))
+dev.off()
+
+rankpclcos <- rankVectors(unlist(pclcos), bgcos)
+rankpclsim <- rankVectors(unlist(pclsim), bgsim)
+
+pdf(file.path(outdir, "bray_PCLRanks.pdf"), width=10, height=8)
+plot(ecdf(rankpclsim), col="red", lwd=3, xlab=c("Rank"), ylab="Cumulative Density", xlim=c(0,1), main="Same PCL Ranks on Bray dataset")
+lines(ecdf(rankpclcos), col="blue", lwd=3)
+legend(x="bottomright", legend=c(sprintf("Learned Metric = %0.3f", 1-mean(rankpclsim)), sprintf("Cosine = %0.3f", 1-mean(rankpclcos))), col=c("red", "blue"), lwd=c(4,4))
+dev.off()
