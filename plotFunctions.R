@@ -1,29 +1,63 @@
+library(scales)
 
 
 #### Plot functions for nTrainingExperiments
 makeNTrainingPlots <- function(ntrainingResPath, saveFiles=1, fname="myNTrainingRes", mytitle="MyData", outpath="."){
   res <- readRDS(ntrainingResPath)
   
+  # Norm figs - rescale so loss is (-1)*Loss/CosineLoss to provide consistency across folds of nTraining
+  # rescale auROC so it is auROC - cosauROC, i.e. change in ROC with training
+  resNorm <- res
+  ixLoss <- grep("Loss", colnames(resNorm))
+  ixAUC <- grep("AURank", colnames(resNorm))
+  
+  for (ii in unique(resNorm$rep)){
+    resNorm[which(resNorm$rep == ii), ixLoss] <- (-1)*resNorm[which(resNorm$rep == ii), ixLoss] / resNorm[rep(which(resNorm$rep == ii & resNorm$trainClasses == 0), sum(resNorm$rep == ii)), ixLoss]
+    resNorm[which(resNorm$rep == ii), ixAUC] <- resNorm[which(resNorm$rep == ii), ixAUC] - resNorm[rep(which(resNorm$rep == ii & resNorm$trainClasses == 0), sum(resNorm$rep == ii)), ixAUC]
+  }
+  
   if (saveFiles){
     pdf(file.path(outpath, sprintf("%s_LossVsTrainingSize.pdf", fname)), width=9, height=7)
-    plot(log2(res$trainClasses+1 ), res$trainLoss, pch=18, cex=2, col=alpha("blue",0.8), xlab="Log2 Number of Training Compounds + 1", ylab="T Loss", 
+    plot(log2(res$trainClasses+1 ), res$trainAvgLoss, pch=18, cex=2, col=alpha("blue",0.8), xlab="Log2 Number of Training Compounds + 1", ylab="T Loss - Compound Average", 
          main=sprintf("%s Training and Testing Loss vs Number of Training Compounds", mytitle), 
-         ylim=c(min(c(res$trainLoss, res$validLoss)), max(c(res$trainLoss, res$validLoss))))
-    points(log2(res$trainClasses+1), res$validLoss, pch=18, col=alpha("red",0.8), cex=2)
+         ylim=c(min(c(res$trainAvgLoss, res$validAvgLoss)), max(c(res$trainAvgLoss, res$validAvgLoss))))
+    points(log2(res$trainClasses+1), res$validAvgLoss, pch=18, col=alpha("red",0.8), cex=2)
     legend(x="bottomright", legend=c("Training Loss", "Testing Loss"), pch=16, col=c("blue", "red"))
-    lines(x=c(-10, 1000), y=c(mean(res$validLoss[res$trainClasses == 0]), mean(res$validLoss[res$trainClasses == 0])), col="black", lty=2)
+    lines(x=c(-10, 1000), y=c(mean(res$validAvgLoss[res$trainClasses == 0]), mean(res$validAvgLoss[res$trainClasses == 0])), col="black", lty=2)
     dev.off()
     
     pdf(file.path(outpath, sprintf("%s_AURankVsTrainingSize.pdf", fname)), width=9, height=7)
     plot(log2(res$trainClasses + 1), res$validAURank, pch=18, cex=2, col=alpha("red", 0.9), xlab="Log2 Number of Training Compounds+1", ylab="AU Rank",
-         main=sprintf("%s Validation AU Rank vs Number of Training Compounds", mytitle), ylim=c(0.7, 1))
+         main=sprintf("%s Validation AU Rank vs Number of Training Compounds", mytitle), ylim=c(min(0.7, min(res$validAURank)), 1))
     lines(x=c(-10, 1000), y=c(mean(res$validAURank[res$trainClasses == 0]), mean(res$validAURank[res$trainClasses == 0])), col="black", lty=2)
+    legend(x="bottomright", legend=c("Testing AURank"), pch=18, col="red")
+    dev.off()
+    
+
+    # Normalized figures:    
+    pdf(file.path(outpath, sprintf("%s_NormLossVsTrainingSize.pdf", fname)), width=9, height=7)
+    plot(log2(resNorm$trainClasses+1 ), resNorm$trainAvgLoss, pch=18, cex=2, col=alpha("blue",0.8), xlab="Log2 Number of Training Compounds + 1", ylab="Normalized T Loss - Compound Average", 
+         main=sprintf("%s Norm Training and Testing Loss vs Number of Training Compounds", mytitle), 
+         ylim=c(min(0, min(c(resNorm$trainAvgLoss, resNorm$validAvgLoss))), max(c(resNorm$trainAvgLoss, resNorm$validAvgLoss))))
+    points(log2(resNorm$trainClasses+1), resNorm$validAvgLoss, pch=18, col=alpha("red",0.8), cex=2)
+    legend(x="bottomright", legend=c("Training Loss", "Testing Loss"), pch=16, col=c("blue", "red"))
+    lines(x=c(-10, 1000), y=c(mean(resNorm$validAvgLoss[resNorm$trainClasses == 0]), mean(resNorm$validAvgLoss[resNorm$trainClasses == 0])), col="black", lty=2)
+    dev.off()
+    
+    pdf(file.path(outpath, sprintf("%s_NormAURankVsTrainingSize.pdf", fname)), width=9, height=7)
+    plot(log2(resNorm$trainClasses + 1), resNorm$validAURank, pch=18, cex=2, col=alpha("red", 0.9), xlab="Log2 Number of Training Compounds+1", ylab="Delta AU Rank relative to cosine",
+         main=sprintf("%s Norm Validation AU Rank vs Number of Training Compounds", mytitle))
+    lines(x=c(-10, 1000), y=c(mean(resNorm$validAURank[resNorm$trainClasses == 0]), mean(resNorm$validAURank[resNorm$trainClasses == 0])), col="black", lty=2)
     legend(x="bottomright", legend=c("Testing AURank"), pch=18, col="red")
     dev.off()
   } else {
     
     
   }
+  
+  res$dsname <- mytitle
+  resNorm$dsname <- mytitle
+  return(list(res=res, resNorm=resNorm))
 }
 
 

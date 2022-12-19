@@ -368,3 +368,22 @@ rankVectors <- function(a,b){
   arank[myvals$ix[myvals$ix > 0]] <- 1 - myvals$count[myvals$ix > 0]/length(b)
   return(arank)
 }
+
+
+# Takes a vector and a list and maps the vector into the same structure as the list
+# equivalent to relisting and unlisted list.
+listify <- function(mylist, myvec){
+  mylengths <- sapply(mylist, length)
+  mynames <- names(mylist)
+  
+  newlist <- list()
+  # Need to vectorize, but for the lists of interest, this is not costly
+  ix <- 1
+  for (ii in seq_along(mylist)){
+    newlist[[mynames[ii]]] <- myvec[ix:(ix + mylengths[ii]-1)]
+    ix <- ix + mylengths[ii]
+  }
+  names(newlist) <- mynames
+  return(newlist)
+}
+

@@ -1,13 +1,24 @@
 library(gridExtra)
 library(ggplot2)
+library(cmapR)
+library(CMAPToolkit)
+#library(dplyr)
+library(torch)
+library(reshape2)
+library(hexbin)
+library(RColorBrewer)
 
 ### This is a script to generate figures for the manuscript.
 
 
+topdir <- "~/Work/bhk/analysis/metric_learning/2022_L1K/"
+outdir <- file.path(topdir, "figspaper")
 
-outdir <- "./figspaper"
+datapath <- "~/Work/bhk/data/l1k/2020/"
+l1kmeta <- CMAPToolkit::read_l1k_meta(datapath, version=2020)
+attach(l1kmeta)
 
-#### Fig 1 workflow - matrix
+#### Fig 1 workflow - matrix ####
 heatthemes <- theme(axis.line=element_blank(), axis.text.x=element_blank(), axis.text.y=element_blank(), axis.ticks=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank(), 
                     legend.position="none", panel.background=element_blank(), panel.border=element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), plot.background=element_blank())
 
@@ -65,7 +76,292 @@ plot(seq(0,1,1e-4), c(0,sort(1-rankVectors(a,b))), type="l", lwd=4, col="blue", 
 dev.off()
 
 
-#### Fig 6: Cosine Theory
+#### Figure 2: L1000 performance ####
+
+l1kdir <- file.path(topdir, "modelRuns")
+
+### Fig 2a - cosine similarity for replicates vs all
+# Pick a representative cell line, say A375
+
+##mymod <- torch::torch_load(file.path(l1kdir, "models", "L1Kmetric_epch=20_cell=A375_model.pt"))
+#xvalds <- readRDS(file.path(l1kdir, "L1Kxval_epch=10_folds=5_cell=A375.rds"))
+#f <- list.files(file.path(l1kdir, "models"), pattern="L1Kxval.*A375")
+
+mycell <- "A375"
+xvalds <- readRDS(file.path(l1kdir, list.files(l1kdir, pattern=sprintf("L1Kxval.*%s.rds", mycell))))
+f <- list.files(file.path(l1kdir, "models"), pattern=sprintf("L1Kxval.*%s", mycell))
+
+xvalreps <- getL1KXValReps(myfolds=xvalds$myfolds, 
+                           models=file.path(l1kdir, "models", f), 
+                           datapath=datapath,
+                           l1kmeta=l1kmeta, 
+                           cellid=mycell)
+
+mlsame <- sapply(xvalreps$inProdReps, FUN=function(x) balancedSample(x$same, k=100))
+mldiff <- sapply(xvalreps$inProdReps, FUN=function(x) x$diff)
+
+cossame <- sapply(xvalreps$cosReps, FUN=function(x) balancedSample(x$same, k=100))
+cosdiff <- sapply(xvalreps$cosReps, FUN=function(x) x$diff)
+
+pdf(file.path(outdir, sprintf("fig2a_%s_pdf.pdf", mycell)), width=8, height=6)
+plot(density(unlist(cosdiff), bw=0.01), col="forestgreen", lwd=1.5, lty=5, xlim=c(-0.5,1), 
+     xlab="Similarity", ylab="Density", main=sprintf("%s Balanced Similarity", mycell))
+lines(density(unlist(cossame), bw=0.01), col="orange", lwd=1.5, lty=5)
+lines(density(unlist(mldiff), bw=0.01), col="blue", lwd=1.5)
+lines(density(unlist(mlsame), bw=0.01), col="firebrick3", lwd=1.5)
+lines(c(0, 0), c(0, 100), col="grey", lty=2)
+legend(x="topright", legend=c("Metric learning replicates", "Metric Learning all pairs", 
+    "Cosine replicates", "Cosine all pairs"), lwd=2.5, col=c("firebrick3", "blue", "purple", "forestgreen"), 
+    lty=c(1,1,5,5))
+dev.off()
+
+### Fig 2b - one example of cross validated replicate recall curves
+
+pdf(file.path(outdir, sprintf("fig2b_%s_xvalBalRankCDF.pdf", mycell)), width=8, height=6)
+plot(c(-10), c(-10), xlim=c(0,1), ylim=c(0,1), xlab="Balanced Rank", ylab="Cumulative Fraction", 
+         main=sprintf("%s balanced rank", mycell))
+for (ii in seq(5)){
+  lines(ecdf(unlist(balancedSample(xvalreps$cosRanks[[ii]], 100))), col="orange", lty=5, lwd=1.5)
+}
+for (ii in seq(5)){
+  lines(ecdf(unlist(balancedSample(xvalreps$mlRanks[[ii]], 100))), col="firebrick3", lwd=1.5)
+}
+legend(x="bottomright", legend=c("Metric Learning", "Cosine"), col=c("firebrick3", "orange"), lwd=2.5,
+       lty=c(1,5), bg="white")
+dev.off()
+
+# Fig 2c - summary cross validated replicate recall (bar plots, auRank?)
+
+# Get cell names
+mycells <- sapply(strsplit(sapply(strsplit(list.files(l1kdir, pattern="L1Kxval"), "cell="), 
+                                  FUN=function(x) x[[2]]), ".rds"), FUN=function(x) x[[1]])
+
+# !!!!!! Fix this once you have the all_xval models
+mycells <- setdiff(mycells, c("all", "MCF10A", "SKL"))
+xvalres <- list()
+
+for (ii in seq_along(mycells)){
+  mycell <- mycells[ii]
+  print(sprintf("%d: %s", ii, mycell))
+  
+  xvalds <- readRDS(file.path(l1kdir, list.files(l1kdir, pattern=sprintf("L1Kxval.*%s.rds", mycell))))
+  f <- list.files(file.path(l1kdir, "models"), pattern=sprintf("L1Kxval.*%s", mycell))
+  
+  xvalres[[mycell]] <- getL1KXValReps(myfolds=xvalds$myfolds, 
+                             models=file.path(l1kdir, "models", f), 
+                             datapath=datapath,
+                             l1kmeta=l1kmeta, 
+                             cellid=mycell)
+  
+}
+
+saveRDS(xvalres, file=file.path(outdir, "../figspaper_res/L1K_xvalres.rds"))
+
+### mean balanced AUC
+# Consider also plotting all 100 balanced AUCs rather than taking the mean for each fold
+# The results are stored as ranks on [0,1], where 0 is the best rank. 
+# To convert to AUC, take 1 - mean balanced rank.
+
+L1KPertBalAUCML <- 1 - sapply(mycells, FUN=function(x) 
+  sapply(xvalres[[x]]$mlRanks, FUN=function(y) 
+    mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(y)))))))
+
+L1KPertBalAUCCos <- 1 - sapply(mycells, FUN=function(x) 
+  sapply(xvalres[[x]]$cosRanks, FUN=function(y) 
+    mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(y)))))))
+
+saveRDS(list(L1KPertBalAUCML=L1KPertBalAUCML, L1KPertBalAUCCos=L1KPertBalAUCCos), 
+        file=file.path(outdir, "../figspaper_res/L1K_MeanBalAUC.rds"))
+
+#ggplot(df, aes(x=Var2, y=value, fill=method)) + geom_boxplot() + facet_wrap(~Var2, scale="free")
+pdf(file=file.path(outdir, "fig2c_L1KMeanBalAUC.pdf"), width=8, height=6)
+ggplot(rbind(data.frame(melt(L1KPertBalAUCCos), method="Cosine"), data.frame(melt(L1KPertBalAUCML), method="Metric Learning")), aes(x=Var2, y=value, fill=method)) + 
+  geom_boxplot() + geom_point(position=position_jitterdodge()) + 
+  theme_minimal() + ylim(c(0.5, 1)) + geom_hline(yintercept=0.5, col="grey", linetype=2) + 
+  xlab("Cell Line") + ylab("Mean Balanced AUC") + ggtitle("L1K Cross-validated Mean Balanced AUC")
+dev.off()
+
+### mean compound AUC - avoids sampling
+L1KPertMeanAUCML <- 1 - sapply(mycells, FUN=function(x) 
+  mean(sapply(xvalres[[x]]$mlRanks, FUN=function(y)
+    mean(sapply(y, FUN=mean)))))
+
+L1KPertMeanAUCCos <- 1 - sapply(mycells, FUN=function(x) 
+  mean(sapply(xvalres[[x]]$cosRanks, FUN=function(y)
+    mean(sapply(y, FUN=mean)))))
+
+pdf(file=file.path(outdir, "fig2c_L1KMeanPertAUC.pdf"), width=8, height=6)
+ggplot(data.frame(ML=L1KPertMeanAUCML, Cos=L1KPertMeanAUCCos, cell=names(L1KPertMeanAUCML)), 
+       aes(x=Cos, y=ML, color=cell)) + geom_point() + xlim(c(0.6, 1)) + theme_minimal() + 
+  ylim(c(0.6,1)) + geom_abline(intercept=0, slope=1, linetype=2, col="grey") + xlab("Cosine Mean AUC") +
+  ylab("Metric Learning Mean AUC") + ggtitle("L1K Cross Validated Mean Compound AUC")
+dev.off()
+
+# FDR fractions - used balanced 
+L1KPertBalFDRML <- data.frame(fdr01=sapply(mycells, FUN=function(x) 
+  mean(sapply(xvalres[[x]]$mlRanks, FUN=function(y) 
+    mean(sapply(seq(100), FUN=function(z) mean(p.adjust(unlist(balancedSample(y)), "fdr") < 0.01)))))), 
+  fdr05=sapply(mycells, FUN=function(x) 
+    mean(sapply(xvalres[[x]]$mlRanks, FUN=function(y) 
+      mean(sapply(seq(100), FUN=function(z) mean(p.adjust(unlist(balancedSample(y)), "fdr") < 0.05)))))),
+  fdr10=sapply(mycells, FUN=function(x) 
+    mean(sapply(xvalres[[x]]$mlRanks, FUN=function(y) 
+      mean(sapply(seq(100), FUN=function(z) mean(p.adjust(unlist(balancedSample(y)), "fdr") < 0.10))))))
+)
+  
+L1KPertBalFDRCos <- data.frame(fdr01=sapply(mycells, FUN=function(x) 
+  mean(sapply(xvalres[[x]]$cosRanks, FUN=function(y) 
+    mean(sapply(seq(100), FUN=function(z) mean(p.adjust(unlist(balancedSample(y)), "fdr") < 0.01)))))), 
+  fdr05=sapply(mycells, FUN=function(x) 
+    mean(sapply(xvalres[[x]]$cosRanks, FUN=function(y) 
+      mean(sapply(seq(100), FUN=function(z) mean(p.adjust(unlist(balancedSample(y)), "fdr") < 0.05)))))),
+  fdr10=sapply(mycells, FUN=function(x) 
+    mean(sapply(xvalres[[x]]$cosRanks, FUN=function(y) 
+      mean(sapply(seq(100), FUN=function(z) mean(p.adjust(unlist(balancedSample(y)), "fdr") < 0.10))))))
+)
+
+L1KPertBalFDRCos$method <- "cosine"
+L1KPertBalFDRML$method <- "metric learning"
+L1KPertBalFDRCos$cell <- row.names(L1KPertBalFDRCos)
+L1KPertBalFDRML$cell <- row.names(L1KPertBalFDRML)
+
+pdf(file=file.path(outdir, "fig2d_L1Kpertfdr05.pdf"), width=8, height=6)
+ggplot(rbind(L1KPertBalFDRCos, L1KPertBalFDRML), aes(x=cell, y=fdr05, fill=method)) + 
+  geom_bar(stat="identity", position="dodge") + theme_minimal() + ylab("Balanced FDR < 0.05") + 
+  ggtitle("L1K Replicate Balanced FDR < 0.05") + ylim(c(0, 0.6))
+dev.off()
+
+# signal-to-noise
+
+L1KsnrML <- sapply(xvalres, FUN=function(x) 
+  sapply(x$inProdReps, FUN=function(y) 
+    (sapply(y$same, mean) - mean(y$diff))/sd(y$diff)))
+L1KsnrCos <- sapply(xvalres, FUN=function(x) 
+  sapply(x$cosReps, FUN=function(y) 
+    (sapply(y$same, mean) - mean(y$diff))/sd(y$diff)))
+
+#bin <- hexbin(unlist(L1KsnrCos), unlist(L1KsnrML), xbins=50)
+#my_colors=colorRampPalette(rev(brewer.pal(11,'Spectral')))
+#plot(bin, colramp = my_colors, xlab="Cosine Signal-to-Noise ratio", ylab="Metric Learning SNR", 
+#     main="Signal-to-noise ratio comparison by compound, L1000")
+
+pdf(file=file.path(outdir, "Sfig_L1KSNR_density.pdf"), width=10, height=10)
+ggplot(data.frame(cos=unlist(L1KsnrCos), ml=unlist(L1KsnrML)), aes(x=cos, y=ml)) + geom_bin_2d(bins=100) + 
+  scale_fill_continuous(type="viridis") + ylim(c(-5, 10)) + xlim(c(-5, 10)) + theme_minimal() + 
+  geom_abline(intercept=0, slope=1, col="red", linetype=2) + xlab("Cosine Signal-to-noise ratio") + 
+  ylab("Metric Learning SNR") + ggtitle("Signal-to-noise ratio comparison by compound, L1000")
+dev.off()
+
+pdf(file=file.path(outdir, "Sfig_L1KSNR_pdf.pdf"), width=8, height=6)  
+plot(density(unlist(L1KsnrCos), bw=0.03), col="blue", lwd=2, xlab="SNR", ylab="Density", 
+     main="L1K compound signal-to-noise ratio")
+lines(density(unlist(L1KsnrML), bw=0.03), col="red", lwd=2)
+legend(x="topright", legend=c("Cosine", "Metric Learning"), lwd=4, col=c("blue", "red"))
+dev.off()
+
+pdf(file=file.path(outdir, "Sfig_L1KSNR_ecdf.pdf"), width=8, height=6)
+plot(ecdf(unlist(L1KsnrCos)), col="blue", lwd=2, xlab="SNR", ylab="Density", 
+     main="L1K compound SNR ECDF", xlim=c(-2, 5))
+lines(ecdf(unlist(L1KsnrML)), col="red", lwd=2)
+legend(x="bottomright", legend=c("Cosine", "Metric Learning"), lwd=4, col=c("blue", "red"))
+grid()
+dev.off()
+
+
+# mean average precision? (Moshkov)
+# folds of enrichment (Moshkov)
+
+
+# Fig 2d - PCL recall example
+
+# Fig 2e - summary PCL recall (auRank?)
+
+# Fig 2f - FDR plots for replicates, PCLs
+
+
+
+#### Figure 3: Cell Painting performance ####
+
+# Fig 3a - cosine similarity example
+# Fig 3b - cross validated replicate recall curves
+# Fig 3c - summary cross validated replicate recall 
+# Fig 3d - PCL recall example
+# Fig 3e - summary PCL recall (auRank)
+# Fig 3f - FDR plots for replicates, PCLs
+
+
+
+#### Figure 4: How much data do you need to learn a useful representation? ####
+# L1000
+ntraindir <- "~/Work/bhk/analysis/metric_learning/2022_L1K/modelRuns"
+f <- list.files(ntraindir, pattern="ntraining")
+fcells <- sapply(strsplit(f, split="cell="), FUN=function(x) strsplit(x[2], ".rds")[[1]])
+
+ntrainL1K <- lapply(seq_along(f), FUN=function(x) 
+  makeNTrainingPlots(ntrainingResPath = file.path(ntraindir, f[x]), saveFiles=1, fname=fcells[x], mytitle=fcells[x], outpath=file.path(ntraindir, "nTrainingFigs")))
+
+resNorm <- bind_rows(lapply(seq(6), FUN=function(x) ntrainL1K[[x]]$resNorm))
+
+pdf(file=file.path(outdir, "fig4a_normValidLoss.pdf"), width=8, height=6)
+ggplot(resNorm, aes(x=log2(trainClasses+1), y=validAvgLoss, color=dsname)) + geom_point() + geom_smooth(method="loess") + theme_minimal() + 
+  xlab("Log2 N of Training Compounds") + ylab("Normalized Average Validation Loss by compound") + ggtitle("Validation Loss vs Number of Training compounds") + 
+  geom_hline(yintercept=-1, color="black", linetype="dashed") + scale_color_discrete(name="cell line")
+dev.off()
+
+pdf(file=file.path(outdir, "fig4Sa_normTrainLoss.pdf"), width=8, height=6)
+ggplot(resNorm, aes(x=log2(trainClasses+1), y=trainAvgLoss, color=dsname)) + geom_point() + geom_smooth(method="loess") + theme_minimal() + 
+  xlab("Log2 N of Training Compounds") + ylab("Normalized Average Train Loss by compound") + ggtitle("Training Loss vs Number of Training compounds") + 
+  geom_hline(yintercept=-1, color="black", linetype="dashed") + scale_color_discrete(name="cell line") + ylim(-10, 0)
+dev.off()
+
+pdf(file=file.path(outdir, "fig4b_deltaValidAURank.pdf"), width=8, height=6)
+ggplot(resNorm, aes(x=log2(trainClasses+1), y=validAURank, color=dsname)) + geom_point() + geom_smooth(method="loess") + theme_minimal() + 
+  xlab("Log2 N of Training Compounds") + ylab("Delta Average Validation AURank by compound") + ggtitle("Change in Validation AURank vs Number of Training compounds") + 
+  geom_hline(yintercept=0, color="black", linetype="dashed") + scale_color_discrete(name="cell line")
+dev.off()
+
+
+# Cell Painting
+cpdir <- "~/Work/bhk/analysis/metric_learning/2022_cellpaint/"
+braydir <- file.path(cpdir, "bray/models")
+lincsdir <- file.path(cpdir, "lincs/models")
+
+brayntrain <- makeNTrainingPlots(ntrainingResPath= file.path(braydir, "brayntraining_epch=10.rds"), saveFiles=1, fname="bray", mytitle="bray", 
+                                 outpath=file.path(braydir, "ntrainFigs"))
+
+lincsntrainf <- list.files(lincsdir, pattern="ntraining")
+lincsCells <- c("Batch1", "Batch2")
+
+lincsntrain <- lapply(seq_along(lincsntrainf), FUN=function(x) 
+  makeNTrainingPlots(ntrainingResPath = file.path(lincsdir, lincsntrainf[x]), saveFiles=1, fname=lincsCells[x], mytitle=lincsCells[x], 
+                     outpath=file.path(lincsdir, "ntrainFigs")))
+
+cpntrain <- c(lincsntrain, list(brayntrain))
+cpNorm <- bind_rows(lapply(seq_along(cpntrain), FUN=function(x) cpntrain[[x]]$resNorm))
+
+pdf(file=file.path(outdir, "fig4c_normValidLossCP.pdf"), width=8, height=6)
+ggplot(cpNorm, aes(x=log2(trainClasses+1), y=validAvgLoss, color=dsname)) + geom_point() + geom_smooth(method="loess") + theme_minimal() + 
+  xlab("Log2 N of Training Compounds") + ylab("Normalized Average Validation Loss by compound") + ggtitle("Cell Painting Validation Loss vs Number of Training compounds") + 
+  geom_hline(yintercept=-1, color="black", linetype="dashed") + scale_color_discrete(name="dataset")
+dev.off()
+
+pdf(file=file.path(outdir, "fig4Sc_normTrainLoss.pdf"), width=8, height=6)
+ggplot(cpNorm, aes(x=log2(trainClasses+1), y=trainAvgLoss, color=dsname)) + geom_point() + geom_smooth(method="loess") + theme_minimal() + 
+  xlab("Log2 N of Training Compounds") + ylab("Normalized Average Train Loss by compound") + ggtitle("Cell Painting Training Loss vs Number of Training compounds") + 
+  geom_hline(yintercept=-1, color="black", linetype="dashed") + scale_color_discrete(name="dataset") 
+dev.off()
+
+pdf(file=file.path(outdir, "fig4d_deltaValidAURank.pdf"), width=8, height=6)
+ggplot(cpNorm, aes(x=log2(trainClasses+1), y=validAURank, color=dsname)) + geom_point() + geom_smooth(method="loess") + theme_minimal() + 
+  xlab("Log2 N of Training Compounds") + ylab("Delta Average Validation AURank by compound") + ggtitle("Cell Painting Change in Validation AURank vs Number of Training compounds") + 
+  geom_hline(yintercept=0, color="black", linetype="dashed") + scale_color_discrete(name="dataset")
+dev.off()
+
+
+#### Figure 5: Cell line specificity ####
+
+
+#### Fig 6: Cosine Theory ####
 # Figure 6b: see bhk/code/cosine/cosineScript.R
 
 #### Fig 6a:
@@ -79,7 +375,7 @@ dev.off()
 
 #### Fig 6a Revised:
 datapath <- "~/Work/bhk/data/l1k/2020/"
-l1kmeta <- read_l1k_meta(datapath, version=2020)
+l1kmeta <- CMAPToolkit::read_l1k_meta(datapath, version=2020)
 attach(l1kmeta)
 
 mycells <- c("A375", "A549", "ASC", "HCC515", "HEK293", "HEPG2", "MCF7", "NPC", "PC3")
@@ -161,8 +457,10 @@ dev.off()
 
 
 
-
+#############################
 ########### Committee Figures
+#############################
+
 
 # L1K PCL losses
 setwd("~/Work/bhk/analysis/metric_learning/2022_L1K/modelRuns/PCLFigs")
