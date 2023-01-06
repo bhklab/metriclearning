@@ -123,7 +123,7 @@ getL1KReps <- function(datapath, l1kmeta, cellid="A375", mymodel, datalabel="L1K
 }
 
 
-getL1KXValReps <- function(myfolds, models, datapath, l1kmeta, cellid="A375"){
+getL1KXValReps <- function(myfolds, mymodel, datapath, l1kmeta, cellid="A375"){
   
   if (cellid == "all"){
     l1kmeta$siginfo$pert_iname <- sprintf("%s_%s", l1kmeta$siginfo$pert_iname, l1kmeta$siginfo$cell_id)
@@ -163,8 +163,35 @@ getL1KXValReps <- function(myfolds, models, datapath, l1kmeta, cellid="A375"){
 }
 
 
-getL1KMoA <- function(){
+getL1KMoA <- function(datapath, l1kmeta, cellid, mymodel, pclds){
+
+  if (cellid == "all"){
+    l1kmeta$siginfo$pert_iname <- sprintf("%s_%s", l1kmeta$siginfo$pert_iname, l1kmeta$siginfo$cell_id)
+    mysigs <- l1kmeta$siginfo[l1kmeta$siginfo$pert_type == "trt_cp",]
+  } else {
+    mysigs <- l1kmeta$siginfo[l1kmeta$siginfo$cell_id == cellid & l1kmeta$siginfo$pert_type == "trt_cp", ]
+  }
   
+  ds <- parse_gctx(CMAPToolkit::get_level5_ds(datapath), rid=l1kmeta$landmarks$pr_gene_id, cid=mysigs$sig_id)
+  
+  # Necessary because JURKAT has 32 bad signatures where all values are 0
+  if (sum(colSums(ds@mat^2) == 0) > 0){
+    excl_cids <- ds@cid[which(colSums(ds@mat^2) == 0)]
+    mysigs <- mysigs[!(mysigs$sig_id %in% excl_cids), ]
+    ds <- parse_gctx(CMAPToolkit::get_level5_ds(datapath), rid=l1kmeta$landmarks$pr_gene_id, cid=mysigs$sig_id)
+  }
+  
+  mymodel <- torch::torch_load(mymodel)
+  
+  mlPCLs <- innerProductPairwiseGroups(model=mymodel, mat1=t(ds@mat), classes=mysigs$pert_iname, 
+                                           sets=pclds$pertnames, compact=1)
+  cosPCLs <- innerProductPairwiseGroups(model="cosine", mat1=t(ds@mat), classes=mysigs$pert_iname, 
+                                        sets=pclds$pertnames, compact=1)
+  
+  mlRanks <- listify(mlPCLs$setSims, rankVectors(unlist(mlPCLs$setSims), mlPCLs$allSims))
+  cosRanks <- listify(cosPCLs$setSims, rankVectors(unlist(cosPCLs$setSims), cosPCLs$allSims))
+  
+  return(list(mlPCLs=mlPCLs, cosPCLs=cosPCLs, mlRanks=mlRanks, cosRanks=cosRanks))  
 }
 
 
@@ -182,6 +209,6 @@ getCPMoA <- function(){
 
 balancedSample <- function(mylist, k=100){
   
-  return(sapply(mylist, FUN=function(x) sample(x, min(length(x), 100))))
+  return(sapply(mylist, FUN=function(x) sample(x, min(length(x), k))))
   
 }

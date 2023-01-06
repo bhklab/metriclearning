@@ -12,11 +12,20 @@ library(RColorBrewer)
 
 
 topdir <- "~/Work/bhk/analysis/metric_learning/2022_L1K/"
+cpdir <- "~/Work/bhk/analysis/metric_learning/2022_cellpaint"
 outdir <- file.path(topdir, "figspaper")
 
 datapath <- "~/Work/bhk/data/l1k/2020/"
 l1kmeta <- CMAPToolkit::read_l1k_meta(datapath, version=2020)
 attach(l1kmeta)
+
+braypath <- "~/Work/bhk/data/cellpainting/bray-2017/bray_2017_combined_profiles.rds"
+lincspath <- "~/Work/bhk/data/cellpainting/lincs-cell-painting/lincs-cell-painting/spherized_profiles/profiles"
+lincs1 <- file.path(lincspath, "2016_04_01_a549_48hr_batch1_dmso_spherized_profiles_with_input_normalized_by_dmso.rds")
+lincs2 <- file.path(lincspath, "2017_12_05_Batch2_dmso_spherized_profiles_with_input_normalized_by_dmso.rds")
+
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7") #, "#F0E442"
+
 
 #### Fig 1 workflow - matrix ####
 heatthemes <- theme(axis.line=element_blank(), axis.text.x=element_blank(), axis.text.y=element_blank(), axis.ticks=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank(), 
@@ -178,7 +187,8 @@ pdf(file=file.path(outdir, "fig2c_L1KMeanBalAUC.pdf"), width=8, height=6)
 ggplot(rbind(data.frame(melt(L1KPertBalAUCCos), method="Cosine"), data.frame(melt(L1KPertBalAUCML), method="Metric Learning")), aes(x=Var2, y=value, fill=method)) + 
   geom_boxplot() + geom_point(position=position_jitterdodge()) + 
   theme_minimal() + ylim(c(0.5, 1)) + geom_hline(yintercept=0.5, col="grey", linetype=2) + 
-  xlab("Cell Line") + ylab("Mean Balanced AUC") + ggtitle("L1K Cross-validated Mean Balanced AUC")
+  xlab("Cell Line") + ylab("Mean Balanced AUC") + ggtitle("L1K Cross-validated Mean Balanced AUC") + 
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1))
 dev.off()
 
 ### mean compound AUC - avoids sampling
@@ -272,12 +282,108 @@ dev.off()
 # folds of enrichment (Moshkov)
 
 
+
+
+#### Fig 2e - summary PCL recall (auRank?)
+pclds <- readRDS("data/pclds.rds")
+
+pclcells <- sapply(strsplit(sapply(strsplit(list.files(l1kdir, pattern="L1Kmetric"), "cell="), 
+                                  FUN=function(x) x[[2]]), ".rds"), FUN=function(x) x[[1]])
+pclcells <- setdiff(pclcells, "all")
+pclres <- list()
+
+for (ii in seq_along(pclcells)){
+  acell <- pclcells[ii]
+  print(acell)
+  modelds <- readRDS(file.path(l1kdir, list.files(l1kdir, pattern=sprintf("L1Kmetric.*%s.rds", acell))))
+  f <- list.files(file.path(l1kdir, "models"), pattern=sprintf("L1Kmetric.*%s", acell))
+  
+  pclres[[acell]] <- getL1KMoA(datapath, l1kmeta, acell, mymodel=file.path(l1kdir, "models", f[1]), pclds=pclds)
+}
+
+L1KMOABalAUCML <- 1 - sapply(pclcells, FUN=function(x) 
+    mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(pclres[[x]]$mlRanks, 1000))))))
+
+L1KMOABalAUCCos <- 1 - sapply(pclcells, FUN=function(x) 
+    mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(pclres[[x]]$cosRanks, 1000))))))
+
+pdf(file.path(outdir, "fig2e_L1KMoAMeanBalAUC.pdf"), width=8, height=6)
+ggplot(rbind(data.frame(method="ml", auc=L1KMOABalAUCML, cell=names(L1KMOABalAUCML)), 
+      data.frame(method="cos", auc=L1KMOABalAUCCos, cell=names(L1KMOABalAUCCos))),
+      aes(x=cell, y=auc, fill=method)) + geom_bar(stat="identity", position="dodge") + 
+  theme_minimal() + theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1)) + 
+  coord_cartesian(ylim=c(0.5,0.8)) + ylab("MoA Mean Balanced AUC") + ggtitle("L1K MoA Mean Balanced AUC")
+dev.off()
+
+pdf(file.path(outdir, "fig2e_L1KMoAMeanBalAUC_scatter.pdf"), width=8, height=6)
+ggplot(data.frame(cell=names(L1KMOABalAUCML), cosAUC=L1KMOABalAUCCos, mlAUC=L1KMOABalAUCML), 
+       aes(x=cosAUC, y=mlAUC, color=cell)) + geom_point(aes(shape=cell, stroke=1.5, size=1.5)) + xlim(c(0.5, 0.8)) + ylim(c(0.5, 0.8)) + 
+  theme_minimal() + ggtitle("L1K MoA Mean Balanced AUC") + geom_abline(intercept=0, slope=1, linetype=2, col="black") + 
+  scale_shape_manual(values=rep(c(3, 4, 16, 17, 18),5)) + 
+  scale_color_manual(values=rep(cbbPalette, 3)[1:15]) + guides(size="none")
+dev.off()
+
+
 # Fig 2d - PCL recall example
 
-# Fig 2e - summary PCL recall (auRank?)
+
+# PCL SNR  
+
+L1KMoASNRML <- sapply(pclres, FUN=function(x) (sapply(x$mlPCLs$setSims, mean) - mean(x$mlPCLs$allSims))/sd(x$mlPCLs$allSims))
+L1KMoASNRCos <- sapply(pclres, FUN=function(x) (sapply(x$cosPCLs$setSims, mean) - mean(x$cosPCLs$allSims))/sd(x$cosPCLs$allSims))
+
+# Need to fix the size of the points
+pdf(file.path(outdir, "Sfig_L1KSNR_MoA_scatter.pdf"), width=8, height=6)
+ggplot(data.frame(ml=unlist(L1KMoASNRML), cos=unlist(L1KMoASNRCos), 
+        cell=unlist(sapply(seq(15), FUN=function(x) rep(names(L1KMoASNRML)[x], sapply(L1KMoASNRML, length)[x])))), 
+       aes(x=cos, y=ml, color=cell)) + geom_point(aes(shape=cell, size=0.001, alpha=0.8)) + theme_minimal() + 
+  scale_color_manual(values=sort(rep(cbbPalette, 3))[1:15]) + 
+  scale_shape_manual(values=rep(c(16, 17, 18),5)) + guides(size="none", alpha="none") + 
+  geom_abline(intercept=0, slope=1, col="red", linetype=2) + xlim(c(-2.5, 10)) + ylim(c(-2.5, 10)) + 
+  ylab("Cosine MoA SNR") + ylab("Metric Learning MoA SNR") + ggtitle("Comparison of MoA SNR")
+dev.off()
+
+pdf(file.path(outdir, "Sfig_L1KSNR_MoA_DeltaDensity.pdf"), width=8, height=6)
+ggplot(data.frame(ml=unlist(L1KMoASNRML), cos=unlist(L1KMoASNRCos), 
+                  cell=unlist(sapply(seq(15), FUN=function(x) rep(names(L1KMoASNRML)[x], sapply(L1KMoASNRML, length)[x])))), 
+       aes(x=ml-cos, color=cell, fill=cell)) + geom_density(alpha=0.6, position="stack") + theme_minimal() + 
+  geom_vline(xintercept=0, linetype=2, col="black") + xlab("MoA SNR: Metric Learning - Cosine") +
+  ggtitle("Change in MoA Mean SNR with metric learning vs cosine")
+dev.off()
 
 # Fig 2f - FDR plots for replicates, PCLs
+L1KMoABalFDRML <- data.frame(fdr01=sapply(pclres, FUN=function(x) 
+    mean(sapply(seq(10), FUN=function(y) mean(p.adjust(unlist(balancedSample(x$mlRanks, k=1000)), "fdr") < 0.01)))), 
+  fdr05=sapply(pclres, FUN=function(x) 
+    mean(sapply(seq(10), FUN=function(y) mean(p.adjust(unlist(balancedSample(x$mlRanks, k=1000)), "fdr") < 0.05)))), 
+  fdr10=sapply(pclres, FUN=function(x) 
+    mean(sapply(seq(10), FUN=function(y) mean(p.adjust(unlist(balancedSample(x$mlRanks, k=1000)), "fdr") < 0.10)))) 
+)
 
+L1KMoABalFDRCos <- data.frame(fdr01=sapply(pclres, FUN=function(x) 
+  mean(sapply(seq(10), FUN=function(y) mean(p.adjust(unlist(balancedSample(x$cosRanks, k=1000)), "fdr") < 0.01)))), 
+  fdr05=sapply(pclres, FUN=function(x) 
+    mean(sapply(seq(10), FUN=function(y) mean(p.adjust(unlist(balancedSample(x$cosRanks, k=1000)), "fdr") < 0.05)))), 
+  fdr10=sapply(pclres, FUN=function(x) 
+    mean(sapply(seq(10), FUN=function(y) mean(p.adjust(unlist(balancedSample(x$cosRanks, k=1000)), "fdr") < 0.10)))) 
+)
+
+L1KMoABalFDRML$cell <- row.names(L1KMoABalFDRML)
+L1KMoABalFDRML$method <- "metric learning"
+L1KMoABalFDRCos$cell <- row.names(L1KMoABalFDRCos)
+L1KMoABalFDRCos$method <- "cosine"
+
+pdf(file=file.path(outdir, "fig2f_L1KMoAfdr10.pdf"), width=8, height=6)
+ggplot(rbind(L1KMoABalFDRCos, L1KMoABalFDRML), aes(x=cell, y=fdr10, fill=method)) + 
+  geom_bar(stat="identity", position="dodge") + theme_minimal() + ylab("Balanced FDR < 0.1") + 
+  ggtitle("L1K PCL Balanced FDR < 0.1") + ylim(c(0, 0.5))
+dev.off()
+
+pdf(file=file.path(outdir, "fig2f_L1KMoAfdr05.pdf"), width=8, height=6)
+ggplot(rbind(L1KMoABalFDRCos, L1KMoABalFDRML), aes(x=cell, y=fdr05, fill=method)) + 
+  geom_bar(stat="identity", position="dodge") + theme_minimal() + ylab("Balanced FDR < 0.05") + 
+  ggtitle("L1K PCL Balanced FDR < 0.05") + ylim(c(0, 0.5))
+dev.off()
 
 
 #### Figure 3: Cell Painting performance ####
@@ -288,6 +394,13 @@ dev.off()
 # Fig 3d - PCL recall example
 # Fig 3e - summary PCL recall (auRank)
 # Fig 3f - FDR plots for replicates, PCLs
+
+braydir <- file.path(cpdir, "bray/models")
+lincsdir <- file.path(cpdir, "lincs/models")
+
+modelset <- "brayxval_epch=10_smp=20"
+
+
 
 
 
@@ -359,6 +472,8 @@ dev.off()
 
 
 #### Figure 5: Cell line specificity ####
+
+
 
 
 #### Fig 6: Cosine Theory ####

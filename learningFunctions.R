@@ -232,7 +232,7 @@ innerProductPairwiseGroups <- function(model, mat1, classes, sets, compact=0){
     
   setSims <- list()
   
-  for (ii in length(sets)){
+  for (ii in seq_along(sets)){
     myset <- sets[[ii]]
     # Check how many elements of classes are in my set. We require at least two:
     mygrps <- intersect(classes, myset)
@@ -253,7 +253,7 @@ innerProductPairwiseGroups <- function(model, mat1, classes, sets, compact=0){
     names(setSims) <- names(sets)
   }
   
-  return(setSims=setSims, allSims=sims)
+  return(list(setSims=setSims, allSims=sims))
 }
 
 
@@ -380,8 +380,12 @@ listify <- function(mylist, myvec){
   # Need to vectorize, but for the lists of interest, this is not costly
   ix <- 1
   for (ii in seq_along(mylist)){
-    newlist[[mynames[ii]]] <- myvec[ix:(ix + mylengths[ii]-1)]
-    ix <- ix + mylengths[ii]
+    if (mylengths[ii] > 0){
+      newlist[[ii]] <- myvec[ix:(ix + mylengths[ii]-1)]
+      ix <- ix + mylengths[ii]
+    } else {
+      newlist[[ii]] <- NULL
+    }
   }
   names(newlist) <- mynames
   return(newlist)
