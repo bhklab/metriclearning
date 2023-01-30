@@ -123,7 +123,7 @@ getL1KReps <- function(datapath, l1kmeta, cellid="A375", mymodel, datalabel="L1K
 }
 
 
-getL1KXValReps <- function(myfolds, mymodel, datapath, l1kmeta, cellid="A375"){
+getL1KXValReps <- function(myfolds, models, datapath, l1kmeta, cellid="A375"){
   
   if (cellid == "all"){
     l1kmeta$siginfo$pert_iname <- sprintf("%s_%s", l1kmeta$siginfo$pert_iname, l1kmeta$siginfo$cell_id)
@@ -195,17 +195,57 @@ getL1KMoA <- function(datapath, l1kmeta, cellid, mymodel, pclds){
 }
 
 
-getCPReps <- function(){
+getCPReps <- function(cpmat, mymodel, pertlabels, datalabel="datalabel"){
   
+  inProdReps <- innerProductGroups(model=mymodel, cpmat, pertlabels, compact=1)
+  cosReps <- innerProductGroups(model="cosine", cpmat, pertlabels, compact=1)
+  
+  mlRanks <- listify(inProdReps$same, rankVectors(unlist(inProdReps$same), inProdReps$diff))
+  cosRanks <- listify(cosReps$same, rankVectors(unlist(cosReps$same), cosReps$diff))
+  
+  return(list(inProdReps=inProdReps, cosReps=cosReps, mlRanks=mlRanks, cosRanks=cosRanks, datalabel=datalabel))
 }
 
-getCPXvalReps <- function(){
+getCPXvalReps <- function(cpmat, cpmeta, myfolds, models, datalabel="datalabel"){
   
+  inProdReps <- cosReps <- mlRanks <- cosRanks <- list()
+  
+  for (ii in seq_len(length(myfolds))){
+    mymodel <- torch::torch_load(models[ii])
+    #foldsigs <- mysigs[mysigs$]
+  }
 }
 
-getCPMoA <- function(){
-  
+
+getCPMoA <- function(cpmat, cpmeta, mymodel, pertlabels, pclds, datalabel="datalabel"){
+  if (length(unique(cpmeta$Metadata_cell_id)) > 1){
+    retlist <- list()
+    
+    for (mycell in unique(cpmeta$Metadata_cell_id)){
+      print(mycell)
+      ix <- which(cpmeta$Metadata_cell_id == mycell)
+      b <- getCPMoA(cpmat[ix, ], cpmeta[ix, ], mymodel, pertlabels[ix], pclds, datalabel=sprintf("%s %s", datalabel, mycell))
+      retlist <- c(retlist, list(b))
+    }
+    
+    names(retlist) <- unique(cpmeta$Metadata_cell_id)
+    
+    return(retlist)
+    
+  } else {
+    mlPCLs <- innerProductPairwiseGroups(model=mymodel, mat1=cpmat, classes=pertlabels, 
+                                         sets=pclds$pertids, compact=1)
+    cosPCLs <- innerProductPairwiseGroups(model="cosine", mat1=cpmat, classes=pertlabels, 
+                                          sets=pclds$pertids, compact=1)
+    
+    mlRanks <- listify(mlPCLs$setSims, rankVectors(unlist(mlPCLs$setSims), mlPCLs$allSims))
+    cosRanks <- listify(cosPCLs$setSims, rankVectors(unlist(cosPCLs$setSims), cosPCLs$allSims))
+    
+    return(list(mlPCLs=mlPCLs, cosPCLs=cosPCLs, mlRanks=mlRanks, cosRanks=cosRanks, datalabel=datalabel))
+  }
 }
+
+
 
 balancedSample <- function(mylist, k=100){
   

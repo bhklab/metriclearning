@@ -400,8 +400,6 @@ loadLincsData <- function(lincspath, samplecp=0, splitGrps=1, byCell=1){
     }
   }
   
-  
-  
   #if (samplecp > 0){
   #  cpcounts <- table(cpMeta$Metadata_pert_iname)
   #}

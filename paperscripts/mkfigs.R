@@ -283,7 +283,6 @@ dev.off()
 
 
 
-
 #### Fig 2e - summary PCL recall (auRank?)
 pclds <- readRDS("data/pclds.rds")
 
@@ -396,13 +395,94 @@ dev.off()
 # Fig 3f - FDR plots for replicates, PCLs
 
 braydir <- file.path(cpdir, "bray/models")
-lincsdir <- file.path(cpdir, "lincs/models")
+pclds <- readRDS("data/pclds.rds")
 
-modelset <- "brayxval_epch=10_smp=20"
+brayds <- loadBrayData(braypath)
+lincsds1 <- loadLincsData(file.path(lincspath, "2016_04_01_a549_48hr_batch1_dmso_spherized_profiles_with_input_normalized_by_dmso.rds"), byCell = 1, splitGrps = 0)
+lincsds2 <- loadLincsData(file.path(lincspath, "2017_12_05_Batch2_dmso_spherized_profiles_with_input_normalized_by_dmso.rds"), byCell = 0, splitGrps = 0)
+
+l1m <- table(lincsds1$metads$Metadata_moa)
+l2m <- table(lincsds2$metads$Metadata_moa)
+
+# The first element is "", i.e. empty and unassigned, so exclude this.
+# It is very important that lincsds2 be read with byCell = 0 and splitGrps = 0, otherwise cell IDs and groupIDs get appended to pert identifiers. 
+# The by Cell and splitGrps flags are important for training the metric and defining batch sizes, not for evaluation. 
+lincsMoADS <- list(moaNames = c(names(l1m)[-1], names(l2m)[-1]), 
+                   pertids = c(sapply(names(l1m)[-1], FUN=function(x) unique(lincsds1$metads$Metadata_pert_id[lincsds1$metads$Metadata_moa == x])), 
+                               sapply(names(l2m)[-1], FUN=function(x) unique(lincsds2$metads$Metadata_pert_id[lincsds2$metads$Metadata_moa == x]))), 
+                   pertnames = c(sapply(names(l1m)[-1], FUN=function(x) unique(lincsds1$metads$Metadata_pert_iname[lincsds1$metads$Metadata_moa == x])), 
+                                 sapply(names(l2m)[-1], FUN=function(x) unique(lincsds2$metads$Metadata_pert_iname[lincsds2$metads$Metadata_moa == x]))))
+                   
+
+braymodel <- torch::torch_load(file.path(braydir, "braymetric_epch=10_smp=50_model.pt"))
+lincs1model <- torch::torch_load(file.path(cpdir, "lincs/models/lincsmetric_a549_2016_dmso_epch=10_model.pt"))
+lincs2model <- torch::torch_load(file.path(cpdir, "lincs/models/lincsmetric_batch2_dmso_bycell_epch=10_model.pt"))
 
 
+brayReps <- getCPReps(brayds$ds, mymodel=braymodel, pertlabels=brayds$metads$Metadata_pert_id, datalabel="Bray DS centered full")
+lincs1Reps <- getCPReps(lincsds1$ds, mymodel=lincs1model, pertlabels=lincsds1$metads$Metadata_pert_id, datalabel="LINCS A549 DMSO full model")
+lincs2Reps <- getCPReps(lincsds2$ds, mymodel=lincs2model, pertlabels=lincsds2$metads$Metadata_pert_id, datalabel="LINCS Batch2 DMSO full model")
+
+brayMoA <- getCPMoA(brayds$ds, brayds$metads, mymodel=braymodel, pertlabels=brayds$metads$Metadata_pert_id, 
+                    pclds=pclds, datalabel="Bray MoA, centered full")
+lincs1MoA <- getCPMoA(lincsds1$ds, lincsds1$metads, mymodel=lincs1model, pertlabels=lincsds1$metads$Metadata_pert_id, 
+                      pclds=pclds, datalabel="LINCS A549 MoA DMSO full model")
+lincs2MoA <- getCPMoA(lincsds2$ds, lincsds2$metads, mymodel=lincs2model, pertlabels=lincsds2$metads$Metadata_pert_id, 
+                      pclds=pclds, datalabel="LINCS Batch2 MoA DMSO full model")
+lincs2MoAByCell <-getCPMoA(lincsds2$ds, lincsds2$metads, mymodel=lincs2model, pertlabels=lincsds2$metads$Metadata_pert_id, 
+                           pclds=pclds, datalabel="LINCS Batch2 MoA DMSO full model")
+
+brayMoANative <- getCPMoA(brayds$ds, brayds$metads, mymodel=braymodel, pertlabels=brayds$metads$Metadata_pert_id, 
+                    pclds=lincsMoADS, datalabel="Bray Native MoA, centered full")
+lincs1MoANative <- getCPMoA(lincsds1$ds, lincsds1$metads, mymodel=lincs1model, pertlabels=lincsds1$metads$Metadata_pert_id, 
+                       pclds=lincsMoADS, datalabel="LINCS A549 Native MoAs DMSO full model")
+lincs2MoABCNative <-getCPMoA(lincsds2$ds, lincsds2$metads, mymodel=lincs2model, pertlabels=lincsds2$metads$Metadata_pert_id, 
+                           pclds=lincsMoADS, datalabel="LINCS Batch2 Native MoAs DMSO full model by cell")
 
 
+# Fig 3a - Cell Painting Cosine
+
+pdf(file=file.path(outdir, "fig3a_bray_simpdfs.pdf"), width=8, height=6)
+plot(density(unlist(brayReps$inProdReps$diff), bw=0.01), col="blue", lwd=1.5, xlim=c(-1, 1), 
+     xlab="Similarity", ylab="Density", main=sprintf("CDRP similarity density"))
+lines(density(unlist(brayReps$inProdReps$same), bw=0.01), col="firebrick3", lwd=1.5)
+lines(density(unlist(brayReps$cosReps$diff), bw=0.01), col="forestgreen", lwd=1.5, lty=5)
+lines(density(unlist(brayReps$cosReps$same), bw=0.01), col="orange", lwd=1.5, lty=5)
+lines(c(0, 0), c(0, 100), col="grey", lty=2)
+legend(x="topright", legend=c("Metric learning replicates", "Metric Learning all pairs", 
+                              "Cosine replicates", "Cosine all pairs"), lwd=2.5, col=c("firebrick3", "blue", "orange", "forestgreen"), 
+       lty=c(1,1,5,5))
+dev.off()
+
+
+L1Perts <- intersect(names(lincs1Reps$inProdReps$same), unique(lincsds1$metads$Metadata_pert_id[lincsds1$metads$Metadata_pert_type == "trt"]))
+L2Perts <- intersect(names(lincs2Reps$inProdReps$same), unique(lincsds2$metads$Metadata_pert_id[lincsds2$metads$Metadata_pert_type == "trt"]))
+
+pdf(file=file.path(outdir, "fig3a2_lincs1_simpdfs.pdf"), width=8, height=6)
+plot(density(unlist(lincs1Reps$cosReps$diff), bw=0.01), col="forestgreen", lwd=1.5, lty=5, xlab="Similarity", ylab="Density", main=sprintf("Cell Health A549 similarity density"))
+lines(density(unlist(lincs1Reps$cosReps$same[L1Perts]), bw=0.01), col="orange", lwd=1.5, lty=5)
+lines(density(unlist(lincs1Reps$inProdReps$diff), bw=0.01), col="blue", lwd=1.5)
+lines(density(unlist(lincs1Reps$inProdReps$same[L1Perts]), bw=0.01), col="firebrick3", lwd=1.5)
+legend(x="topright", legend=c("Metric learning replicates", "Metric Learning all pairs", 
+                              "Cosine replicates", "Cosine all pairs"), lwd=2.5, col=c("firebrick3", "blue", "orange", "forestgreen"), 
+       lty=c(1,1,5,5))
+dev.off()
+
+pdf(file=file.path(outdir, "fig3a3_lincs2_simpdfs.pdf"), width=8, height=6)
+plot(density(unlist(lincs2Reps$cosReps$diff), bw=0.01), col="forestgreen", lwd=1.5, lty=5, xlab="Similarity", ylab="Density", main=sprintf("Cell Health Batch 2 similarity density"))
+lines(density(unlist(lincs2Reps$cosReps$same[L2Perts]), bw=0.01), col="orange", lwd=1.5, lty=5)
+lines(density(unlist(lincs2Reps$inProdReps$diff), bw=0.01), col="blue", lwd=1.5)
+lines(density(unlist(lincs2Reps$inProdReps$same[L2Perts]), bw=0.01), col="firebrick3", lwd=1.5)
+legend(x="topright", legend=c("Metric learning replicates", "Metric Learning all pairs", 
+                              "Cosine replicates", "Cosine all pairs"), lwd=2.5, col=c("firebrick3", "blue", "orange", "forestgreen"), 
+       lty=c(1,1,5,5))
+dev.off()
+
+
+# Fig 3b: Cross validation
+
+
+# Fig 3d, 3e: MoA
 
 #### Figure 4: How much data do you need to learn a useful representation? ####
 # L1000
