@@ -171,16 +171,21 @@ saveRDS(xvalres, file=file.path(outdir, "../figspaper_res/L1K_xvalres.rds"))
 # The results are stored as ranks on [0,1], where 0 is the best rank. 
 # To convert to AUC, take 1 - mean balanced rank.
 
-L1KPertBalAUCML <- 1 - sapply(mycells, FUN=function(x) 
-  sapply(xvalres[[x]]$mlRanks, FUN=function(y) 
-    mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(y)))))))
-
-L1KPertBalAUCCos <- 1 - sapply(mycells, FUN=function(x) 
-  sapply(xvalres[[x]]$cosRanks, FUN=function(y) 
-    mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(y)))))))
-
-saveRDS(list(L1KPertBalAUCML=L1KPertBalAUCML, L1KPertBalAUCCos=L1KPertBalAUCCos), 
-        file=file.path(outdir, "../figspaper_res/L1K_MeanBalAUC.rds"))
+if (!file.exists(file.path(outdir, "../figspaper_res/L1K_MeanBalAUC.rds"))){
+  L1KPertBalAUCML <- 1 - sapply(mycells, FUN=function(x) 
+    sapply(xvalres[[x]]$mlRanks, FUN=function(y) 
+      mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(y)))))))
+  
+  L1KPertBalAUCCos <- 1 - sapply(mycells, FUN=function(x) 
+    sapply(xvalres[[x]]$cosRanks, FUN=function(y) 
+      mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(y)))))))
+  
+  saveRDS(list(L1KPertBalAUCML=L1KPertBalAUCML, L1KPertBalAUCCos=L1KPertBalAUCCos), 
+          file=file.path(outdir, "../figspaper_res/L1K_MeanBalAUC.rds"))
+} else {
+  balAucList <- readRDS(file.path(outdir, "../figspaper_res/L1K_MeanBalAUC.rds"))
+  attach(balAucList)
+}
 
 #ggplot(df, aes(x=Var2, y=value, fill=method)) + geom_boxplot() + facet_wrap(~Var2, scale="free")
 pdf(file=file.path(outdir, "fig2c_L1KMeanBalAUC.pdf"), width=8, height=6)
@@ -374,14 +379,14 @@ L1KMoABalFDRCos$method <- "cosine"
 
 pdf(file=file.path(outdir, "fig2f_L1KMoAfdr10.pdf"), width=8, height=6)
 ggplot(rbind(L1KMoABalFDRCos, L1KMoABalFDRML), aes(x=cell, y=fdr10, fill=method)) + 
-  geom_bar(stat="identity", position="dodge") + theme_minimal() + ylab("Balanced FDR < 0.1") + 
-  ggtitle("L1K PCL Balanced FDR < 0.1") + ylim(c(0, 0.5))
+  geom_bar(stat="identity", position="dodge") + theme_minimal() + theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1)) + 
+  ylab("Balanced FDR < 0.1") + ggtitle("L1K PCL Balanced FDR < 0.1") + ylim(c(0, 0.5))
 dev.off()
 
 pdf(file=file.path(outdir, "fig2f_L1KMoAfdr05.pdf"), width=8, height=6)
 ggplot(rbind(L1KMoABalFDRCos, L1KMoABalFDRML), aes(x=cell, y=fdr05, fill=method)) + 
-  geom_bar(stat="identity", position="dodge") + theme_minimal() + ylab("Balanced FDR < 0.05") + 
-  ggtitle("L1K PCL Balanced FDR < 0.05") + ylim(c(0, 0.5))
+  geom_bar(stat="identity", position="dodge") + theme_minimal() + theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1)) + 
+  ylab("Balanced FDR < 0.05") + ggtitle("L1K PCL Balanced FDR < 0.05") + ylim(c(0, 0.5))
 dev.off()
 
 
@@ -400,6 +405,9 @@ pclds <- readRDS("data/pclds.rds")
 brayds <- loadBrayData(braypath)
 lincsds1 <- loadLincsData(file.path(lincspath, "2016_04_01_a549_48hr_batch1_dmso_spherized_profiles_with_input_normalized_by_dmso.rds"), byCell = 1, splitGrps = 0)
 lincsds2 <- loadLincsData(file.path(lincspath, "2017_12_05_Batch2_dmso_spherized_profiles_with_input_normalized_by_dmso.rds"), byCell = 0, splitGrps = 0)
+
+lincsds2_hidose$ds <- lincsds2$ds[lincsds2$metads$Metadata_mmoles_per_liter >= 10, ]
+lincsds2_hidose$metads <- lincsds2$metads[lincsds2$metads$Metadata_mmoles_per_liter >= 10, ]
 
 l1m <- table(lincsds1$metads$Metadata_moa)
 l2m <- table(lincsds2$metads$Metadata_moa)
@@ -423,20 +431,25 @@ brayReps <- getCPReps(brayds$ds, mymodel=braymodel, pertlabels=brayds$metads$Met
 lincs1Reps <- getCPReps(lincsds1$ds, mymodel=lincs1model, pertlabels=lincsds1$metads$Metadata_pert_id, datalabel="LINCS A549 DMSO full model")
 lincs2Reps <- getCPReps(lincsds2$ds, mymodel=lincs2model, pertlabels=lincsds2$metads$Metadata_pert_id, datalabel="LINCS Batch2 DMSO full model")
 
+# These MoA results use the L1000 PCLs (pclds) as the definitive labels for what constitutes a MoA class
 brayMoA <- getCPMoA(brayds$ds, brayds$metads, mymodel=braymodel, pertlabels=brayds$metads$Metadata_pert_id, 
                     pclds=pclds, datalabel="Bray MoA, centered full")
 lincs1MoA <- getCPMoA(lincsds1$ds, lincsds1$metads, mymodel=lincs1model, pertlabels=lincsds1$metads$Metadata_pert_id, 
                       pclds=pclds, datalabel="LINCS A549 MoA DMSO full model")
 lincs2MoA <- getCPMoA(lincsds2$ds, lincsds2$metads, mymodel=lincs2model, pertlabels=lincsds2$metads$Metadata_pert_id, 
                       pclds=pclds, datalabel="LINCS Batch2 MoA DMSO full model")
-lincs2MoAByCell <-getCPMoA(lincsds2$ds, lincsds2$metads, mymodel=lincs2model, pertlabels=lincsds2$metads$Metadata_pert_id, 
+lincs2MoAByCell <- getCPMoA(lincsds2$ds, lincsds2$metads, mymodel=lincs2model, pertlabels=lincsds2$metads$Metadata_pert_id, 
                            pclds=pclds, datalabel="LINCS Batch2 MoA DMSO full model")
 
+lincs2MoAByCellHighDose <- getCPMoA(lincsds2_hidose$ds, lincsds2_hidose$metads, mymodel=lincs2model, pertlabels=lincsds2_hidose$metads$Metadata_pert_id, 
+                            pclds=pclds, datalabel="LINCS Batch2 MoA DMSO full model High Dose")
+
+# The 'Native' MoA results use mechanism of action annotations directly from the LINCS Cell Painting datasets.
 brayMoANative <- getCPMoA(brayds$ds, brayds$metads, mymodel=braymodel, pertlabels=brayds$metads$Metadata_pert_id, 
                     pclds=lincsMoADS, datalabel="Bray Native MoA, centered full")
 lincs1MoANative <- getCPMoA(lincsds1$ds, lincsds1$metads, mymodel=lincs1model, pertlabels=lincsds1$metads$Metadata_pert_id, 
                        pclds=lincsMoADS, datalabel="LINCS A549 Native MoAs DMSO full model")
-lincs2MoABCNative <-getCPMoA(lincsds2$ds, lincsds2$metads, mymodel=lincs2model, pertlabels=lincsds2$metads$Metadata_pert_id, 
+lincs2MoABCNative <- getCPMoA(lincsds2$ds, lincsds2$metads, mymodel=lincs2model, pertlabels=lincsds2$metads$Metadata_pert_id, 
                            pclds=lincsMoADS, datalabel="LINCS Batch2 Native MoAs DMSO full model by cell")
 
 
@@ -483,6 +496,215 @@ dev.off()
 
 
 # Fig 3d, 3e: MoA
+
+pdf(file=file.path(outdir, "fig3_MoABrayAUC.pdf"), width=8, height=6)
+plot(ecdf(unlist(balancedSample(brayMoA$mlRanks, k=500))), col="red", xlim=c(0,1), xlab="Balanced Rank", ylab="Cumulative Fraction", 
+     main="CDRP MoA ROC", lwd=2)
+lines(ecdf(unlist(balancedSample(brayMoA$cosRanks, k=500))), col="blue", lwd=2)
+legend(x="bottomright", legend=c(sprintf("Metric Learning, AUC = %0.4f", 1-mean(sapply(seq(100), FUN=function(x) mean(unlist(balancedSample(brayMoA$mlRanks, k=500)))))), 
+                                 sprintf("Cosine, AUC = %0.4f", 1-mean(sapply(seq(100), FUN=function(x) mean(unlist(balancedSample(brayMoA$cosRanks, k=500))))))),
+       col=c("red", "blue"), lwd=2.5)
+dev.off()
+
+pdf(file=file.path(outdir, "fig3_MoALincs1AUC.pdf"), width=8, height=6)
+plot(ecdf(unlist(balancedSample(lincs1MoA$mlRanks, k=500))), col="red", xlim=c(0,1), xlab="Balanced Rank", ylab="Cumulative Fraction", 
+     main="Cell Health 1 MoA ROC", lwd=2)
+lines(ecdf(unlist(balancedSample(lincs1MoA$cosRanks, k=500))), col="blue", lwd=2)
+legend(x="bottomright", legend=c(sprintf("Metric Learning, AUC = %0.4f", 1-mean(sapply(seq(100), FUN=function(x) mean(unlist(balancedSample(lincs1MoA$mlRanks, k=500)))))), 
+                                 sprintf("Cosine, AUC = %0.4f", 1-mean(sapply(seq(100), FUN=function(x) mean(unlist(balancedSample(lincs1MoA$cosRanks, k=500))))))),
+       col=c("red", "blue"), lwd=2.5)
+dev.off()
+
+pdf(file=file.path(outdir, "fig3_MoALincs2AUC.pdf"), width=8, height=6)
+plot(ecdf(unlist(balancedSample(lincs2MoAByCell$A549$mlRanks, k=500))), col=cbbPalette[2], xlim=c(0,1), xlab="Balanced Rank", ylab="Cumulative Fraction", 
+     main="Cell Health 2 MoA ROC")
+lines(ecdf(unlist(balancedSample(lincs2MoAByCell$A549$cosRanks, k=500))), col=cbbPalette[3], lwd=2)
+lines(ecdf(unlist(balancedSample(lincs2MoAByCell$MCF7$mlRanks, k=500))), col=cbbPalette[4], lwd=2)
+lines(ecdf(unlist(balancedSample(lincs2MoAByCell$MCF7$cosRanks, k=500))), col=cbbPalette[5], lwd=2)
+lines(ecdf(unlist(balancedSample(lincs2MoAByCell$U2OS$mlRanks, k=500))), col=cbbPalette[6], lwd=2)
+lines(ecdf(unlist(balancedSample(lincs2MoAByCell$U2OS$cosRanks, k=500))), col=cbbPalette[7], lwd=2)
+legend(x="bottomright", legend=c(sprintf("A549 Metric Learning, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$A549$mlRanks, k=500)))))), 
+                                 sprintf("A549 Cosine, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$A549$cosRanks, k=500)))))),
+                                 sprintf("MCF7 Metric Learning, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$MCF7$mlRanks, k=500)))))), 
+                                 sprintf("MCF7 Cosine, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$MCF7$cosRanks, k=500)))))),
+                                 sprintf("U2OS Metric Learning, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$U2OS$mlRanks, k=500)))))), 
+                                 sprintf("U2OS Cosine, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$U2OS$cosRanks, k=500))))))),
+       col=cbbPalette[2:7], lwd=2.5)
+dev.off()
+
+pdf(file=file.path(outdir, "fig3_MoALincs2AUCHighDose.pdf"), width=8, height=6)
+plot(ecdf(unlist(balancedSample(lincs2MoAByCellHighDose$A549$mlRanks, k=500))), col=cbbPalette[2], xlim=c(0,1), xlab="Balanced Rank", ylab="Cumulative Fraction", 
+     main="Cell Health 2 MoA ROC")
+lines(ecdf(unlist(balancedSample(lincs2MoAByCellHighDose$A549$cosRanks, k=500))), col=cbbPalette[3], lwd=2)
+lines(ecdf(unlist(balancedSample(lincs2MoAByCellHighDose$MCF7$mlRanks, k=500))), col=cbbPalette[4], lwd=2)
+lines(ecdf(unlist(balancedSample(lincs2MoAByCellHighDose$MCF7$cosRanks, k=500))), col=cbbPalette[5], lwd=2)
+lines(ecdf(unlist(balancedSample(lincs2MoAByCellHighDose$U2OS$mlRanks, k=500))), col=cbbPalette[6], lwd=2)
+lines(ecdf(unlist(balancedSample(lincs2MoAByCellHighDose$U2OS$cosRanks, k=500))), col=cbbPalette[7], lwd=2)
+legend(x="bottomright", legend=c(sprintf("A549 Metric Learning, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$A549$mlRanks, k=500)))))), 
+                                 sprintf("A549 Cosine, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$A549$cosRanks, k=500)))))),
+                                 sprintf("MCF7 Metric Learning, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$MCF7$mlRanks, k=500)))))), 
+                                 sprintf("MCF7 Cosine, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$MCF7$cosRanks, k=500)))))),
+                                 sprintf("U2OS Metric Learning, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$U2OS$mlRanks, k=500)))))), 
+                                 sprintf("U2OS Cosine, AUC = %0.4f", 1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$U2OS$cosRanks, k=500))))))),
+       col=cbbPalette[2:7], lwd=2.5)
+dev.off()
+
+##### auRankCPdf #####
+auRankCPdf <- data.frame(dataset=character(), auROC=numeric(), method=character(), fdr10=numeric())
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("CDRP MoA", "CDRP MoA"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(brayMoA$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(brayMoA$cosRanks, k=500)))))), 
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(brayMoA$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(brayMoA$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs1 MoA", "Lincs1 MoA"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs1MoA$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs1MoA$cosRanks, k=500)))))), 
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs1MoA$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs1MoA$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs1 Native MoA", "Lincs1 Native MoA"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs1MoANative$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs1MoANative$cosRanks, k=500)))))),
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs1MoANative$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs1MoANative$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs2 MoA A549", "Lincs2 MoA A549"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$A549$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$A549$cosRanks, k=500)))))),
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCell$A549$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCell$A549$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs2 MoA MCF7", "Lincs2 MoA MCF7"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$MCF7$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$MCF7$cosRanks, k=500)))))), 
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCell$MCF7$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCell$MCF7$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs2 MoA U2OS", "Lincs2 MoA U2OS"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$U2OS$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCell$U2OS$cosRanks, k=500)))))),
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCell$U2OS$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCell$U2OS$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs2 MoA - High Dose A549", "Lincs2 MoA - High Dose A549"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCellHighDose$A549$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCellHighDose$A549$cosRanks, k=500)))))), 
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCellHighDose$A549$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCellHighDose$A549$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs2 MoA - High Dose MCF7", "Lincs2 MoA - High Dose MCF7"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCellHighDose$MCF7$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCellHighDose$MCF7$cosRanks, k=500)))))), 
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCellHighDose$MCF7$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCellHighDose$MCF7$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs2 MoA - High Dose U2OS", "Lincs2 MoA - High Dose U2OS"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCellHighDose$U2OS$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoAByCellHighDose$U2OS$cosRanks, k=500)))))),
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCellHighDose$U2OS$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoAByCellHighDose$U2OS$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs2 MoA - Native A549", "Lincs2 MoA - Native A549"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoABCNative$A549$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoABCNative$A549$cosRanks, k=500)))))), 
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoABCNative$A549$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoABCNative$A549$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs2 MoA - Native MCF7", "Lincs2 MoA - Native MCF7"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoABCNative$MCF7$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoABCNative$MCF7$cosRanks, k=500)))))), 
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoABCNative$MCF7$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoABCNative$MCF7$cosRanks, k=500)), method="fdr") < 0.1))))))
+auRankCPdf <- rbind(auRankCPdf, data.frame(dataset=c("Lincs2 MoA - Native U2OS", "Lincs2 MoA - Native U2OS"), 
+                                           method=c("ML", "Cos"), 
+                                           auROC=c(1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoABCNative$U2OS$mlRanks, k=500))))),
+                                                   1-mean(sapply(seq(10), FUN=function(x) mean(unlist(balancedSample(lincs2MoABCNative$U2OS$cosRanks, k=500)))))), 
+                                           fdr10=c(mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoABCNative$U2OS$mlRanks, k=500)), method="fdr") < 0.1))),
+                                                   mean(sapply(seq(10), FUN=function(x) mean(p.adjust(unlist(balancedSample(lincs2MoABCNative$U2OS$cosRanks, k=500)), method="fdr") < 0.1))))))
+
+##### auRankCPdf Plot #####
+pdf(file.path(outdir, "fig3S_CPMoAAUROC_bar.pdf"), width=8, height=6)
+ggplot(auRankCPdf, aes(x=dataset, y=auROC, fill=method)) + geom_bar(stat="identity", position="dodge") + theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1)) + xlab("Cell Painting dataset") + ylab("AUROC") + 
+  ggtitle("Mechanism of Action AUROC for cell painting datasets") + coord_cartesian(ylim=c(0.4,1))
+dev.off()
+
+pdf(file.path(outdir, "fig3S_CPMoAfdr10_bar.pdf"), width=8, height=6)
+ggplot(auRankCPdf, aes(x=dataset, y=fdr10, fill=method)) + geom_bar(stat="identity", position="dodge") + theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1)) + xlab("Cell Painting dataset") + ylab("Balanced FDR < 0.1") + 
+  ggtitle("Mechanism of Action FDR < 0.1 for cell painting datasets")
+dev.off()
+
+#### MoA Scatter for Cell Painting Datasets, Mean Rank and Mean FDR < 0.1
+L2MoA <- data.frame(cell=c(rep("MCF7", 88), rep("U2OS", 88), rep("A549", 88)), 
+                    mlL2vals = as.numeric(sapply(lincs2MoAByCell, FUN=function(x) sapply(x$mlRanks, mean))), 
+                    cosL2vals = as.numeric(sapply(lincs2MoAByCell, FUN=function(x) sapply(x$cosRanks, mean))),
+                    mlL2FDR = as.numeric(sapply(lincs2MoAByCell, FUN=function(x) sapply(x$mlRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)))), 
+                    cosL2FDR = as.numeric(sapply(lincs2MoAByCell, FUN=function(x) sapply(x$cosRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)))), 
+                    dose="all")
+
+L2MoAHD <- data.frame(cell=c(rep("MCF7", 88), rep("U2OS", 88), rep("A549", 88)), 
+                      mlL2vals = as.numeric(sapply(lincs2MoAByCellHighDose, FUN=function(x) sapply(x$mlRanks, mean))), 
+                      cosL2vals = as.numeric(sapply(lincs2MoAByCellHighDose, FUN=function(x) sapply(x$cosRanks, mean))),
+                      mlL2FDR = as.numeric(sapply(lincs2MoAByCellHighDose, FUN=function(x) sapply(x$mlRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)))), 
+                      cosL2FDR = as.numeric(sapply(lincs2MoAByCellHighDose, FUN=function(x) sapply(x$cosRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)))), 
+                      dose = "10 uM")
+
+LMoA <- data.frame(cell="A549", 
+                   mlL1vals = sapply(lincs1MoA$mlRanks, FUN=mean), 
+                   cosL1vals = sapply(lincs1MoA$cosRanks, FUN=mean),
+                   mlL1FDR = sapply(lincs1MoA$mlRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)), 
+                   cosL1FDR = sapply(lincs1MoA$cosRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)))
+
+
+BrayMoADF <- data.frame(cell="U2OS", 
+                        mlBrayvals = sapply(brayMoA$mlRanks, FUN=mean), 
+                        cosBrayvals = sapply(brayMoA$cosRanks, FUN=mean), 
+                        mlBrayFDR = sapply(brayMoA$mlRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)), 
+                        cosBrayFDR = sapply(brayMoA$cosRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)))
+
+pdf(file.path(outdir, "fig3S_CPLincs2_MoAMean.pdf"), width=8, height=6)
+ggplot(rbind(L2MoA, L2MoAHD), aes(x=cosL2vals, y=mlL2vals, color=cell, shape=dose)) + geom_point(size=3) + theme_minimal() + xlim(c(0,0.7)) + ylim(c(0,0.7)) + 
+  ggtitle("Cell Health Batch 2 MoA Mean Rank") + geom_abline(intercept=0, slope=1, col="black", lty=2) + xlab("Cosine Mean Rank") + ylab("Metric Learning Mean Rank")
+dev.off()
+
+pdf(file.path(outdir, "fig3S_CPLincs2_MoaFDR.pdf"))
+ggplot(rbind(L2MoA, L2MoAHD), aes(x=cosL2FDR, y=mlL2FDR, color=cell, shape=dose)) + geom_point(size=3) + theme_minimal() + xlim(c(0,1)) + ylim(c(0,1)) + 
+  ggtitle("Cell Health Batch 2 MoA FDR < 0.1") + geom_abline(intercept=0, slope=1, col="black", lty=2) + xlab("Cosine Fraction FDR < 0.1") + ylab("Metric Learning Fraction < 0.1")
+dev.off()
+
+pdf(file.path(outdir, "fig3S_CPLincs1_MoAMean.pdf"), width=8, height=6)
+ggplot(LMoA, aes(x=cosL1vals, y=mlL1vals)) + geom_point(size=3, color=cbbPalette[2]) + theme_minimal() + geom_abline(intercept=0, slope=1, col="red", lty=2) + xlab("Cosine Mean Rank") + 
+  ylab("Metric Learning Mean Rank") + xlim(c(0, 0.8)) + ylim(c(0, 0.8)) + ggtitle("Cell Health Batch 1 MoA Mean Rank")
+dev.off()
+
+pdf(file.path(outdir, "fig3S_CPLincs1_MoAFDR.pdf"))
+ggplot(LMoA, aes(x=cosL1FDR, y=mlL1FDR)) + geom_point(size=3, color=cbbPalette[2]) + theme_minimal() + xlim(c(0,1)) + ylim(c(0,1)) + 
+  ggtitle("Cell Health Batch 1 MoA FDR < 0.1") + geom_abline(intercept=0, slope=1, col="black", lty=2) + xlab("Cosine Fraction FDR < 0.1") + ylab("Metric Learning Fraction < 0.1")
+dev.off()
+
+pdf(file.path(outdir, "fig3S_CPBray_MoAMean.pdf"), width=8, height=6)
+ggplot(BrayMoADF, aes(x=cosBrayvals, y=mlBrayvals)) + geom_point(size=3, color="forestgreen") + theme_minimal() + xlim(c(0, 0.7)) + ylim(c(0, 0.7)) + 
+  ggtitle("CDRP MoA Mean Rank") + xlab("Cosine Mean Rank") + ylab("Metric Learning Mean Rank") + geom_abline(intercept=0, slope=1, col="black", lty=2)
+dev.off()
+
+pdf(file.path(outdir, "fig3S_CPBray_MoAFDR.pdf"))
+ggplot(BrayMoADF, aes(x=cosBrayFDR, y=mlBrayFDR)) + geom_point(size=3, color="forestgreen") + theme_minimal() + xlim(c(0,1)) + ylim(c(0,1)) + 
+  ggtitle("CDRP MoA FDR < 0.1") + geom_abline(intercept=0, slope=1, col="black", lty=2) + xlab("Cosine Fraction FDR < 0.1") + ylab("Metric Learning Fraction < 0.1")
+dev.off()
+
+
+
+# Supp Fig: doses
+pdf(file=file.path(outdir, "fig3S_CPDoses.pdf"), width=8, height=6)
+plot(density(log10(brayds$metads$Metadata_mmoles_per_liter + 1e-3), bw=0.03), col=cbbPalette[2], lwd=3, xlab="Log10 Dose uM", ylab="Density", main="Cell Painting Doses, uM")
+lines(density(log10(lincsds1$metads$Metadata_mmoles_per_liter + 1e-3), bw=0.03), col=cbbPalette[4], lwd=3)
+lines(density(log10(lincsds2$metads$Metadata_mmoles_per_liter + 1e-3), bw=0.03), col=cbbPalette[5], lwd=3)
+legend(x="topleft", legend=c("CDRP 2017", "Cell Health 1", "Cell Health 2"), col=cbbPalette[c(2, 4, 5)], lwd=3)
+dev.off()
+
 
 #### Figure 4: How much data do you need to learn a useful representation? ####
 # L1000
@@ -556,7 +778,10 @@ dev.off()
 
 
 
-#### Fig 6: Cosine Theory ####
+#### Figure 6: Biological Interpretation
+
+
+#### Figure 7: Cosine Theory (MOVE TO METASIG PAPER) ####
 # Figure 6b: see bhk/code/cosine/cosineScript.R
 
 #### Fig 6a:
@@ -651,7 +876,7 @@ grid.arrange(topplot, botplot)
 dev.off()
 
 
-
+ 
 #############################
 ########### Committee Figures
 #############################
@@ -950,4 +1175,32 @@ pdf(file.path(outdir, "bray_PCLRanks.pdf"), width=10, height=8)
 plot(ecdf(rankpclsim), col="red", lwd=3, xlab=c("Rank"), ylab="Cumulative Density", xlim=c(0,1), main="Same PCL Ranks on Bray dataset")
 lines(ecdf(rankpclcos), col="blue", lwd=3)
 legend(x="bottomright", legend=c(sprintf("Learned Metric = %0.3f", 1-mean(rankpclsim)), sprintf("Cosine = %0.3f", 1-mean(rankpclcos))), col=c("red", "blue"), lwd=c(4,4))
+dev.off()
+
+
+
+
+# Eigenvalue distribution 
+mycell <- "HEPG2"
+
+ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
+
+mymodel <- torch_load(file.path(l1kdir, "models", "L1Kmetric_epch=30_cell=HEPG2_model.pt"))
+modelmat <- mymodel(torch_tensor(t(ds@mat), dtype=torch_float()))
+
+pcHEPG2 <- prcomp(t(ds@mat), center=TRUE)
+pcMLHEPG2 <- prcomp(as.matrix(modelmat), center=TRUE)
+
+pctvar <- pcHEPG2$sdev^2/sum(pcHEPG2$sdev^2)
+pctvarML <- pcMLHEPG2$sdev^2/sum(pcMLHEPG2$sdev^2)
+
+pdf(file.path(outdir, "fig6_VarianceExplained_HEPG2.pdf"), width=8, height=6)
+ggplot(data.frame(index=seq(978), native=pctvar, embedded=pctvarML), aes(x=native, y=embedded)) + geom_point() + scale_x_log10() + scale_y_log10() + 
+  geom_abline(intercept=0, slope=1, col="blue", lty=2) + theme_minimal() + coord_cartesian(xlim=c(1e-4, 3e-1), ylim=c(1e-4, 3e-1)) + xlab("Native Pct Variance") +
+  ylab("Embedded Pct Variance") + ggtitle("Variance Explained by Metric Learning in HEPG2")
+dev.off()
+
+pdf(file.path(outdir, "fig6_EigenvalueRatio_HEPG2.pdf"), width=8, height=6)
+ggplot(data.frame(index=seq(978), native=pctvar, embedded=pctvarML, ratio=pctvarML/pctvar), aes(x=index, y=ratio)) + geom_point() + theme_minimal() + 
+  xlab("Eigenvalue index") + ylab("Ratio of eigenvalues of embedding to native") + ggtitle("Ratio of eigenvalues of HEPG2 Embedding vs native")
 dev.off()
