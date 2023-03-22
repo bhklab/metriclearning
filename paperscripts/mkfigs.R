@@ -876,6 +876,57 @@ grid.arrange(topplot, botplot)
 dev.off()
 
 
+
+
+# Eigenvalue distribution 
+mycells <- c("A375", "A549", "HEPG2")
+
+ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
+
+mymodel <- torch_load(file.path(l1kdir, "models", "L1Kmetric_epch=30_cell=HEPG2_model.pt"))
+modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
+
+# Centering is inappropriate because we are taking inner products in the uncentered space. 
+pcHEPG2 <- prcomp(t(ds@mat), center=FALSE)
+pcMLHEPG2 <- prcomp(modelmat, center=FALSE)
+
+pctvar <- pcHEPG2$sdev^2/sum(pcHEPG2$sdev^2)
+pctvarML <- pcMLHEPG2$sdev^2/sum(pcMLHEPG2$sdev^2)
+
+pdf(file.path(outdir, "fig6_VarianceExplained_HEPG2.pdf"), width=8, height=6)
+ggplot(data.frame(index=seq(978), native=pctvar, embedded=pctvarML), aes(x=native, y=embedded)) + geom_point() + scale_x_log10() + scale_y_log10() + 
+  geom_abline(intercept=0, slope=1, col="blue", lty=2) + theme_minimal() + coord_cartesian(xlim=c(1e-4, 3e-1), ylim=c(1e-4, 3e-1)) + xlab("Native Pct Variance") +
+  ylab("Embedded Pct Variance") + ggtitle("Variance Explained by Metric Learning in HEPG2")
+dev.off()
+
+pdf(file.path(outdir, "fig6_EigenvalueRatio_HEPG2.pdf"), width=8, height=6)
+ggplot(data.frame(index=seq(978), native=pctvar, embedded=pctvarML, ratio=pctvarML/pctvar), aes(x=index, y=ratio)) + geom_point() + theme_minimal() + 
+  xlab("Eigenvalue index") + ylab("Ratio of eigenvalues of embedding to native") + ggtitle("Ratio of eigenvalues of HEPG2 Embedding vs native")
+dev.off()
+
+
+# I'm not sure why these aren't identical:
+x <- t(ds@mat) %*% pcHEPG2$rotation
+
+mlRotation <- as.matrix(mymodel(torch_tensor(t(pcHEPG2$rotation), dtype=torch_float())))
+xML <- modelmat %*% t(mlRotation)
+
+plot(apply(x, 2, sd), pcHEPG2$sdev)
+
+origPCVars <- apply(x, 2, sd)^2
+mlPCVars <- apply(xML, 2, sd)^2
+
+origPCVarPct <- origPCVars/sum(origPCVars)
+mlPCVarPct <- mlPCVars/sum(mlPCVars)
+
+
+scaledf <- data.frame(logScaleFactor = log10(mlPCVarPct/origPCVarPct), pcIX = seq(978), cellid=mycell)
+pcVars <- data.frame(cellid=mycell, pcix=seq(978), origPCVarPct = origPCVarPct, mlPCVarPct = mlPCVarPct)
+
+pdf(file.path(outdir, "fig6_VarRescaled_HEPG2.pdf"), width=8, height=6)
+ggplot(scaledf, aes(x=pcIX, y=logScaleFactor, color=cellid)) + geom_point() + theme_minimal() + xlab("PC Index") + ylab("Log10 rescaling factor") + 
+  ggtitle("Rescaling of original principal components in embedded space")
+dev.off()
  
 #############################
 ########### Committee Figures
@@ -1179,28 +1230,3 @@ dev.off()
 
 
 
-
-# Eigenvalue distribution 
-mycell <- "HEPG2"
-
-ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
-
-mymodel <- torch_load(file.path(l1kdir, "models", "L1Kmetric_epch=30_cell=HEPG2_model.pt"))
-modelmat <- mymodel(torch_tensor(t(ds@mat), dtype=torch_float()))
-
-pcHEPG2 <- prcomp(t(ds@mat), center=TRUE)
-pcMLHEPG2 <- prcomp(as.matrix(modelmat), center=TRUE)
-
-pctvar <- pcHEPG2$sdev^2/sum(pcHEPG2$sdev^2)
-pctvarML <- pcMLHEPG2$sdev^2/sum(pcMLHEPG2$sdev^2)
-
-pdf(file.path(outdir, "fig6_VarianceExplained_HEPG2.pdf"), width=8, height=6)
-ggplot(data.frame(index=seq(978), native=pctvar, embedded=pctvarML), aes(x=native, y=embedded)) + geom_point() + scale_x_log10() + scale_y_log10() + 
-  geom_abline(intercept=0, slope=1, col="blue", lty=2) + theme_minimal() + coord_cartesian(xlim=c(1e-4, 3e-1), ylim=c(1e-4, 3e-1)) + xlab("Native Pct Variance") +
-  ylab("Embedded Pct Variance") + ggtitle("Variance Explained by Metric Learning in HEPG2")
-dev.off()
-
-pdf(file.path(outdir, "fig6_EigenvalueRatio_HEPG2.pdf"), width=8, height=6)
-ggplot(data.frame(index=seq(978), native=pctvar, embedded=pctvarML, ratio=pctvarML/pctvar), aes(x=index, y=ratio)) + geom_point() + theme_minimal() + 
-  xlab("Eigenvalue index") + ylab("Ratio of eigenvalues of embedding to native") + ggtitle("Ratio of eigenvalues of HEPG2 Embedding vs native")
-dev.off()
