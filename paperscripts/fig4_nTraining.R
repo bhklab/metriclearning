@@ -67,3 +67,18 @@ ggplot(cpNorm, aes(x=log2(trainClasses+1), y=validAURank, color=dsname)) + geom_
   xlab("Log2 N of Training Compounds") + ylab("Delta Average Validation AURank by compound") + ggtitle("Cell Painting Change in Validation AURank vs Number of Training compounds") + 
   geom_hline(yintercept=0, color="black", linetype="dashed") + scale_color_discrete(name="dataset")
 dev.off()
+
+
+# Bray only while I debug LINCS
+pdf(file=file.path(outdir, "fig4_BrayNormValidLoss.pdf"), width=8, height=6)
+ggplot(brayntrain$resNorm, aes(x=log2(trainClasses+1), y=validAvgLoss, color=dsname)) + geom_point() + geom_smooth(method="loess") + theme_minimal() + 
+  xlab("Log2 N of Training Compounds") + ylab("Normalized Average Validation Loss by compound") + ggtitle("Cell Painting Validation Loss vs Number of Training compounds") + 
+  geom_hline(yintercept=-1, color="black", linetype="dashed") + scale_color_discrete(name="dataset")
+dev.off()
+
+pdf(file=file.path(outdir, "fig4_BraydeltaValidAURank.pdf"), width=8, height=6)
+ggplot(brayntrain$resNorm, aes(x=log2(trainClasses+1), y=validAURank, color=dsname)) + geom_point() + geom_smooth(method="loess") + theme_minimal() + 
+  xlab("Log2 N of Training Compounds") + ylab("Delta Average Validation AURank by compound") + ggtitle("Cell Painting Change in Validation AURank vs Number of Training compounds") + 
+  geom_hline(yintercept=0, color="black", linetype="dashed") + scale_color_discrete(name="dataset")
+dev.off()
+

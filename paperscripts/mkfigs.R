@@ -7,6 +7,7 @@ library(torch)
 library(reshape2)
 library(hexbin)
 library(RColorBrewer)
+library(ggrepel)
 
 ### This is a script to generate figures for the manuscript.
 

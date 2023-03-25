@@ -2,13 +2,16 @@ library(gridExtra)
 library(ggplot2)
 library(cmapR)
 library(CMAPToolkit)
-#library(dplyr)
+library(dplyr)
 library(torch)
 library(reshape2)
 library(hexbin)
 library(RColorBrewer)
+library(ggrepel)
 
 ### This is a script to generate figures for the manuscript.
+
+source("paperFigFuncs.R")
 
 topdir <- "~/Work/bhk/analysis/metric_learning/2022_L1K/"
 cpdir <- "~/Work/bhk/analysis/metric_learning/2022_cellpaint"

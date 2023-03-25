@@ -257,6 +257,7 @@ if (!file.exists(file.path(outdir, "../figspaper_res/L1K_PCLRes.rds"))){
   # SNR 
   L1KMoASNRML <- sapply(pclres, FUN=function(x) (sapply(x$mlPCLs$setSims, mean) - mean(x$mlPCLs$allSims))/sd(x$mlPCLs$allSims))
   L1KMoASNRCos <- sapply(pclres, FUN=function(x) (sapply(x$cosPCLs$setSims, mean) - mean(x$cosPCLs$allSims))/sd(x$cosPCLs$allSims))
+  L1KMoASize <- sapply(pclres, FUN=function(x) sapply(x$mlRanks, length))
   
   # MoA FDR
   L1KMoABalFDRML <- data.frame(fdr01=sapply(pclres, FUN=function(x) 
@@ -312,7 +313,30 @@ dev.off()
 
 
 # PCL SNR  
-# Need to fix the size of the points
+# This is mostly formatting
+pclsnrML <- sapply(seq(92), FUN=function(y) sapply(L1KMoASNRML, FUN=function(x) x[y]))
+pclsnrCos <- sapply(seq(92), FUN=function(y) sapply(L1KMoASNRCos, FUN=function(x) x[y]))
+pclsnrSize <- sapply(seq(92), FUN=function(y) sapply(L1KMoASize, FUN=function(x) x[y]))
+
+pclsnrDF <- data.frame(pcl=pclds$pcldf$pclname, 
+                       cellid=as.character(sapply(rownames(pclsnrML), FUN=function(x) rep(x,92))),
+                       size=as.numeric(pclsnrSize),
+                       ML=as.numeric(pclsnrML), Cos=as.numeric(pclsnrCos))
+
+pdf(file.path(outdir, "fig4_L1KSNR_MoA_scatter.pdf"), width=8, height=6)
+ggplot(pclsnrDF[pclsnrDF$size > 50,], aes(x=Cos, y=ML, color=cellid)) + geom_point(aes(size=log10(size)), alpha=0.8) + 
+  theme_minimal() + geom_abline(slope=1, intercept=0, linetype="dashed", color="black") + 
+  geom_text_repel(aes(label=pcl, size=2)) + xlab("Cosine SNR") + ylab("Metric learning SNR") + 
+  ggtitle("L1K MoA SNR")
+dev.off()
+  
+
+ggplot(hccpclstats[hccpclstats$size > 50,], aes(x=ml, y=cosine)) + geom_point(aes(size=log10(size)), color="blue") + 
+  xlim(c(0.35,1)) + ylim(c(0.35,1)) + theme_minimal() + geom_abline(slope=1, intercept=0, linetype="dashed", color="black") + 
+  geom_text_repel(aes(label=name), size=2) + ggtitle("Distribution of MoA ranks, HCC515") + xlab("Metric Learning") + ylab("Cosine")
+
+
+
 pdf(file.path(outdir, "Sfig_L1KSNR_MoA_scatter.pdf"), width=8, height=6)
 ggplot(data.frame(ml=unlist(L1KMoASNRML), cos=unlist(L1KMoASNRCos), 
                   cell=unlist(sapply(seq(15), FUN=function(x) rep(names(L1KMoASNRML)[x], sapply(L1KMoASNRML, length)[x])))), 
@@ -362,7 +386,7 @@ l1kCounts <- rbind(l1kCounts, data.frame(cellLine="all",
 
 pdf(file=file.path(outdir, "Sfig_L1KCompoundCountsByCell.pdf"), width=8, height=6)
 ggplot(l1kCounts, aes(x=compounds, y=signatures, color=cellLine)) + geom_point(size=2) + theme_minimal() + 
-  scale_x_continuous(trans="log10", limits=c(100, 35000)) + scale_y_continuous(trans="log10", limits=c(1000, 1e6)) + 
+  scale_x_continuous(trans="log10", limits=c(100, 35000), breaks=c(100, 300, 1000, 3000, 10000, 30000)) + scale_y_continuous(trans="log10", limits=c(1000, 1e6)) + 
   xlab("Unique Compounds") + ylab("Compound Signatures") + ggtitle("Number of Signatures and Unique Compounds in L1000 dataset (2020) by Cell Line") 
 dev.off()
 

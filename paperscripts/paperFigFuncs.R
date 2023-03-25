@@ -211,9 +211,28 @@ getCPXvalReps <- function(cpmat, cpmeta, myfolds, models, datalabel="datalabel")
   inProdReps <- cosReps <- mlRanks <- cosRanks <- list()
   
   for (ii in seq_len(length(myfolds))){
+    print(sprintf("fold = %d", ii))
     mymodel <- torch::torch_load(models[ii])
-    #foldsigs <- mysigs[mysigs$]
+    
+    foldix <- which(cpmeta$Metadata_pert_id %in% myfolds[[ii]])
+    
+    # This is a hack
+    if (length(foldix) == 0){
+      print("using pert_iname")
+      foldix <- which(cpmeta$Metadata_pert_iname %in% myfolds[[ii]])
+    }
+    
+    foldmeta <- cpmeta[foldix, ]
+    foldmat <- cpmat[foldix, ]
+    
+    inProdReps[[ii]] <- innerProductGroups(model=mymodel, foldmat, foldmeta$Metadata_pert_id, compact=1)
+    cosReps[[ii]] <- innerProductGroups(model="cosine", foldmat, foldmeta$Metadata_pert_id, compact=1)
+    
+    mlRanks[[ii]] <- listify(inProdReps[[ii]]$same, rankVectors(unlist(inProdReps[[ii]]$same), inProdReps[[ii]]$diff))
+    cosRanks[[ii]] <- listify(cosReps[[ii]]$same, rankVectors(unlist(cosReps[[ii]]$same), cosReps[[ii]]$diff))
   }
+  
+  return(list(inProdReps=inProdReps, cosReps=cosReps, mlRanks=mlRanks, cosRanks=cosRanks, datalabel=datalabel))
 }
 
 
@@ -252,3 +271,23 @@ balancedSample <- function(mylist, k=100){
   return(sapply(mylist, FUN=function(x) sample(x, min(length(x), k))))
   
 }
+
+
+splitCPds <- function(cpds, ix){
+  return(list(ds = cpds$ds[ix, ], metads=cpds$metads[ix,]))
+}
+
+
+summarizeCPMoA <- function(cpMoAds, dsname="", balSampT=100, iter=10){
+  return(data.frame(dataset=c(dsname, dsname), 
+             method=c("ML", "Cos"), 
+             auROC=c(1-mean(sapply(seq(iter), FUN=function(x) mean(unlist(balancedSample(cpMoAds$mlRanks, k=balSampT))))),
+                     1-mean(sapply(seq(iter), FUN=function(x) mean(unlist(balancedSample(cpMoAds$cosRanks, k=balSampT)))))), 
+             fdr05=c(mean(sapply(seq(iter), FUN=function(x) mean(p.adjust(unlist(balancedSample(cpMoAds$mlRanks, k=balSampT)), method="fdr") < 0.05))),
+                     mean(sapply(seq(iter), FUN=function(x) mean(p.adjust(unlist(balancedSample(cpMoAds$cosRanks, k=balSampT)), method="fdr") < 0.05)))), 
+             fdr10=c(mean(sapply(seq(iter), FUN=function(x) mean(p.adjust(unlist(balancedSample(cpMoAds$mlRanks, k=balSampT)), method="fdr") < 0.1))),
+                     mean(sapply(seq(iter), FUN=function(x) mean(p.adjust(unlist(balancedSample(cpMoAds$cosRanks, k=balSampT)), method="fdr") < 0.1)))), 
+             fdr25=c(mean(sapply(seq(iter), FUN=function(x) mean(p.adjust(unlist(balancedSample(cpMoAds$mlRanks, k=balSampT)), method="fdr") < 0.25))),
+                     mean(sapply(seq(iter), FUN=function(x) mean(p.adjust(unlist(balancedSample(cpMoAds$cosRanks, k=balSampT)), method="fdr") < 0.25))))))
+}
+
