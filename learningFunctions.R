@@ -231,6 +231,7 @@ innerProductPairwiseGroups <- function(model, mat1, classes, sets, compact=0){
   sims <- sims[upper.tri(sims)]
     
   setSims <- list()
+  length(setSims) <- length(sets)
   
   for (ii in seq_along(sets)){
     myset <- sets[[ii]]
@@ -246,6 +247,8 @@ innerProductPairwiseGroups <- function(model, mat1, classes, sets, compact=0){
       
       mysim <- innerProduct(model, mat1[jx,], mat1[jx,])
       setSims[[ii]] <- (mysim[upper.tri(mysim)])[filt]
+    } else {
+      setSims[[ii]] <- NA
     }
   }
   

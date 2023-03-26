@@ -291,3 +291,27 @@ summarizeCPMoA <- function(cpMoAds, dsname="", balSampT=100, iter=10){
                      mean(sapply(seq(iter), FUN=function(x) mean(p.adjust(unlist(balancedSample(cpMoAds$cosRanks, k=balSampT)), method="fdr") < 0.25))))))
 }
 
+
+
+summarizeMoAdf_ByMoA <- function(cpMOAds, pclLabels, dsname=""){
+  
+  # A hack to solve an omission on getCPMoA
+  if (length(pclLabels) > length(cpMOAds$mlPCLs$setSims)){
+    print(sprintf("Warning: truncating pclLabels to length %d", length(cpMOAds$mlPCLs$setSims)))
+    pclLabels <- pclLabels[1: length(cpMOAds$mlPCLs$setSims)]
+  }
+  
+  return(data.frame(dsname=dsname,
+                    pcl=pclLabels,
+                    mlAUC=sapply(cpMOAds$mlRanks, FUN=mean), 
+                    cosAUC=sapply(cpMOAds$cosRanks, FUN=mean),
+                    mlFDR05=sapply(cpMOAds$mlRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.05)),
+                    cosFDR05=sapply(cpMOAds$cosRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.05)),
+                    mlFDR10=sapply(cpMOAds$mlRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)),
+                    cosFDR10=sapply(cpMOAds$cosRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)),
+                    mlSNR=(sapply(cpMOAds$mlPCLs$setSims, mean) - mean(cpMOAds$mlPCLs$allSims))/sd(cpMOAds$mlPCLs$allSims),
+                    cosSNR=(sapply(cpMOAds$cosPCLs$setSims, mean) - mean(cpMOAds$cosPCLs$allSims))/sd(cpMOAds$cosPCLs$allSims),
+                    pclSize=sapply(cpMOAds$mlPCLs$setSims, length)))
+  
+}
+

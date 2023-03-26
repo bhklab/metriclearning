@@ -320,7 +320,8 @@ ggplot(moaCPdf, aes(x=dataset, y=fdr10, fill=method)) + geom_bar(stat="identity"
 dev.off()
 
 #### MoA Scatter for Cell Painting Datasets, Mean Rank and Mean FDR < 0.1
-# Refactor this into a function:
+L2MoA <- summarizeMoAdf_ByMoA(lincs2MoAByCell, pclds$pcldf$pclname, dsname="")
+
 L2MoA <- data.frame(cell=c(rep("MCF7", 88), rep("U2OS", 88), rep("A549", 88)), 
                     mlL2vals = as.numeric(sapply(lincs2MoAByCell, FUN=function(x) sapply(x$mlRanks, mean))), 
                     cosL2vals = as.numeric(sapply(lincs2MoAByCell, FUN=function(x) sapply(x$cosRanks, mean))),
@@ -335,22 +336,10 @@ L2MoAHD <- data.frame(cell=c(rep("MCF7", 88), rep("U2OS", 88), rep("A549", 88)),
                       cosL2FDR = as.numeric(sapply(lincs2MoAByCellHighDose, FUN=function(x) sapply(x$cosRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)))), 
                       dose = "10 uM")
 
-LMoA <- data.frame(cell="A549", 
-                   mlL1vals = sapply(lincs1MoA$mlRanks, FUN=mean), 
-                   cosL1vals = sapply(lincs1MoA$cosRanks, FUN=mean),
-                   mlL1FDR = sapply(lincs1MoA$mlRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)), 
-                   cosL1FDR = sapply(lincs1MoA$cosRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)))
+LMoA <- summarizeMoAdf_ByMoA(lincs1MoA, pclds$pcldf$pclname, dsname="CellHlth1 A549")
 
+BrayMoADF <- summarizeMoAdf_ByMoA(brayMoA, pclds$pcldf$pclname, dsname = "CDRP U2OS")
 
-BrayMoADF <- data.frame(cell="U2OS", 
-                        pcl=pclds$pcldf$pclname[1:length(brayMoA$mlPCLs$setSims)],
-                        mlBrayvals = sapply(brayMoA$mlRanks, FUN=mean), 
-                        cosBrayvals = sapply(brayMoA$cosRanks, FUN=mean), 
-                        mlBrayFDR = sapply(brayMoA$mlRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)), 
-                        cosBrayFDR = sapply(brayMoA$cosRanks, FUN=function(y) mean(p.adjust(y, "fdr") < 0.1)),
-                        mlSNR=(sapply(brayMoA$mlPCLs$setSims, mean) - mean(brayMoA$mlPCLs$allSims))/sd(brayMoA$mlPCLs$allSims),
-                        cosSNR=(sapply(brayMoA$cosPCLs$setSims, mean) - mean(brayMoA$cosPCLs$allSims))/sd(brayMoA$cosPCLs$allSims),
-                        pclSize=sapply(brayMoA$mlPCLs$setSims, length))
 
 pdf(file.path(outdir, "fig3S_CPLincs2_MoAMean.pdf"), width=8, height=6)
 ggplot(rbind(L2MoA, L2MoAHD), aes(x=cosL2vals, y=mlL2vals, color=cell, shape=dose)) + geom_point(size=3) + theme_minimal() + xlim(c(0,0.7)) + ylim(c(0,0.7)) + 
