@@ -1,12 +1,107 @@
 source("figinit.R")
 
 
-#### Figure 5: Cell line specificity ####
+
+
+#### Figure 5: Biological Interpretation
+
+# Eigenvalue distribution 
+eigencells <- c("A375", "A549", "HA1E", "MCF10A", "MCF7", "PC3", "VCAP", "ASC", "BT20", "HCC515", "HEK293", "HEPG2", "HUVEC", "NPC")
+eigencells <- sort(eigencells)
+fmodels <- list.files(file.path(l1kdir, "models"), pattern="L1Kmetric_")
+
+eigendata <- list()
+
+for (mycell in eigencells){
+  ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
+  
+  print(sprintf("%s: %s", mycell, fmodels[grep(mycell, fmodels)]))
+  
+  mymodel <- torch_load(file.path(l1kdir, "models", fmodels[grep(mycell, fmodels)]))
+  modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
+  
+  # Centering is inappropriate because we are taking inner products in the uncentered space. 
+  system.time(pcBase <- prcomp(t(ds@mat), center=FALSE))
+  pcML <- prcomp(modelmat, center=FALSE)
+  
+  pctvarBase <- pcBase$sdev^2/sum(pcBase$sdev^2)
+  pctvarML <- pcML$sdev^2/sum(pcML$sdev^2)
+  
+  x <- t(ds@mat) %*% pcBase$rotation
+  mlRotation <- as.matrix(mymodel(torch_tensor(t(pcBase$rotation), dtype=torch_float())))
+  xML <- modelmat %*% t(mlRotation)
+  
+  origPCVars <- apply(x, 2, sd)^2
+  mlPCVars <- apply(xML, 2, sd)^2
+  
+  origPCVarPct <- origPCVars/sum(origPCVars)
+  mlPCVarPct <- mlPCVars/sum(mlPCVars)
+  
+  eigendata[[mycell]] <- list(pcBase=pcBase[c("sdev", "rotation")], pcML=pcML[c("sdev", "rotation")], 
+                              pctvarBase=pctvarBase, pctvarML=pctvarML,
+                              origPCVars=origPCVars, mlPCVars=mlPCVars)
+}
+
+
+# Ghetto plots
+plot(-100, -100, xlim=c(0, 978), ylim=c(-5, 0), xlab="Eigenvalue index", ylab="Percent Variance explained", main="Eigenvalues of L1000 data distribution")
+for (ii in seq_along(eigendata)){
+  lines(log10(eigendata[[ii]]$pctvarBase), col="blue", type="l", lwd=2)
+  lines(log10(eigendata[[ii]]$pctvarML), col="red", type="l", lwd=2)
+}
+legend(x="bottomleft", legend=c("Base (cosine)", "Embedding (ML)"), col=c("blue", "red"), lwd=c(3,3))
+
+plot(-100, -100, xlim=c(0,978), ylim=c(-3, 2), xlab="Eigenvalue index", ylab="log10 Rescaling", main="Rescaling of Eigenvalues of L1000 data distribution")
+for (ii in seq_along(eigendata)){
+  lines(log10(eigendata[[ii]]$pctvarML/eigendata[[ii]]$pctvarBase), col="black", type="l", lwd=2)
+}
+grid()
+
+plot(-10, -10, xlim=c(0, 978), ylim=c(0,1), xlab="Eigenvalue index", ylab="Cumulative pct variance explained", main="Cumulative Percentage of Variance of L1000 data distribution")
+for (ii in seq_along(eigendata)){
+  lines(cumsum(eigendata[[ii]]$pctvarBase), col="blue", type="l", lwd=2)
+  lines(cumsum(eigendata[[ii]]$pctvarML), col="red", type="l", lwd=2)
+}
+legend(x="bottomright", legend=c("Base (cosine)", "Embedding (ML)"), col=c("blue", "red"), lwd=c(3,3))
 
 
 
+# Centering is inappropriate because we are taking inner products in the uncentered space. 
 
-#### Figure 6: Biological Interpretation
+pdf(file.path(outdir, "fig6_VarianceExplained_HEPG2.pdf"), width=8, height=6)
+ggplot(data.frame(index=seq(978), native=pctvar, embedded=pctvarML), aes(x=native, y=embedded)) + geom_point() + scale_x_log10() + scale_y_log10() + 
+  geom_abline(intercept=0, slope=1, col="blue", lty=2) + theme_minimal() + coord_cartesian(xlim=c(1e-4, 3e-1), ylim=c(1e-4, 3e-1)) + xlab("Native Pct Variance") +
+  ylab("Embedded Pct Variance") + ggtitle("Variance Explained by Metric Learning in HEPG2")
+dev.off()
+
+pdf(file.path(outdir, "fig6_EigenvalueRatio_HEPG2.pdf"), width=8, height=6)
+ggplot(data.frame(index=seq(978), native=pctvar, embedded=pctvarML, ratio=pctvarML/pctvar), aes(x=index, y=ratio)) + geom_point() + theme_minimal() + 
+  xlab("Eigenvalue index") + ylab("Ratio of eigenvalues of embedding to native") + ggtitle("Ratio of eigenvalues of HEPG2 Embedding vs native")
+dev.off()
+
+
+# I'm not sure why these aren't identical:
+x <- t(ds@mat) %*% pcHEPG2$rotation
+
+mlRotation <- as.matrix(mymodel(torch_tensor(t(pcHEPG2$rotation), dtype=torch_float())))
+xML <- modelmat %*% t(mlRotation)
+
+plot(apply(x, 2, sd), pcHEPG2$sdev)
+
+origPCVars <- apply(x, 2, sd)^2
+mlPCVars <- apply(xML, 2, sd)^2
+
+origPCVarPct <- origPCVars/sum(origPCVars)
+mlPCVarPct <- mlPCVars/sum(mlPCVars)
+
+
+scaledf <- data.frame(logScaleFactor = log10(mlPCVarPct/origPCVarPct), pcIX = seq(978), cellid=mycell)
+pcVars <- data.frame(cellid=mycell, pcix=seq(978), origPCVarPct = origPCVarPct, mlPCVarPct = mlPCVarPct)
+
+pdf(file.path(outdir, "fig6_VarRescaled_HEPG2.pdf"), width=8, height=6)
+ggplot(scaledf, aes(x=pcIX, y=logScaleFactor, color=cellid)) + geom_point() + theme_minimal() + xlab("PC Index") + ylab("Log10 rescaling factor") + 
+  ggtitle("Rescaling of original principal components in embedded space")
+dev.off()
 
 
 #### Figure 7: Cosine Theory (MOVE TO METASIG PAPER) ####
@@ -106,52 +201,3 @@ dev.off()
 
 
 
-# Eigenvalue distribution 
-mycells <- c("A375", "A549", "HEPG2")
-
-ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
-
-mymodel <- torch_load(file.path(l1kdir, "models", "L1Kmetric_epch=30_cell=HEPG2_model.pt"))
-modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
-
-# Centering is inappropriate because we are taking inner products in the uncentered space. 
-pcHEPG2 <- prcomp(t(ds@mat), center=FALSE)
-pcMLHEPG2 <- prcomp(modelmat, center=FALSE)
-
-pctvar <- pcHEPG2$sdev^2/sum(pcHEPG2$sdev^2)
-pctvarML <- pcMLHEPG2$sdev^2/sum(pcMLHEPG2$sdev^2)
-
-pdf(file.path(outdir, "fig6_VarianceExplained_HEPG2.pdf"), width=8, height=6)
-ggplot(data.frame(index=seq(978), native=pctvar, embedded=pctvarML), aes(x=native, y=embedded)) + geom_point() + scale_x_log10() + scale_y_log10() + 
-  geom_abline(intercept=0, slope=1, col="blue", lty=2) + theme_minimal() + coord_cartesian(xlim=c(1e-4, 3e-1), ylim=c(1e-4, 3e-1)) + xlab("Native Pct Variance") +
-  ylab("Embedded Pct Variance") + ggtitle("Variance Explained by Metric Learning in HEPG2")
-dev.off()
-
-pdf(file.path(outdir, "fig6_EigenvalueRatio_HEPG2.pdf"), width=8, height=6)
-ggplot(data.frame(index=seq(978), native=pctvar, embedded=pctvarML, ratio=pctvarML/pctvar), aes(x=index, y=ratio)) + geom_point() + theme_minimal() + 
-  xlab("Eigenvalue index") + ylab("Ratio of eigenvalues of embedding to native") + ggtitle("Ratio of eigenvalues of HEPG2 Embedding vs native")
-dev.off()
-
-
-# I'm not sure why these aren't identical:
-x <- t(ds@mat) %*% pcHEPG2$rotation
-
-mlRotation <- as.matrix(mymodel(torch_tensor(t(pcHEPG2$rotation), dtype=torch_float())))
-xML <- modelmat %*% t(mlRotation)
-
-plot(apply(x, 2, sd), pcHEPG2$sdev)
-
-origPCVars <- apply(x, 2, sd)^2
-mlPCVars <- apply(xML, 2, sd)^2
-
-origPCVarPct <- origPCVars/sum(origPCVars)
-mlPCVarPct <- mlPCVars/sum(mlPCVars)
-
-
-scaledf <- data.frame(logScaleFactor = log10(mlPCVarPct/origPCVarPct), pcIX = seq(978), cellid=mycell)
-pcVars <- data.frame(cellid=mycell, pcix=seq(978), origPCVarPct = origPCVarPct, mlPCVarPct = mlPCVarPct)
-
-pdf(file.path(outdir, "fig6_VarRescaled_HEPG2.pdf"), width=8, height=6)
-ggplot(scaledf, aes(x=pcIX, y=logScaleFactor, color=cellid)) + geom_point() + theme_minimal() + xlab("PC Index") + ylab("Log10 rescaling factor") + 
-  ggtitle("Rescaling of original principal components in embedded space")
-dev.off()

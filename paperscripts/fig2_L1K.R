@@ -230,7 +230,7 @@ dev.off()
 # folds of enrichment (Moshkov)
 
 #### Fig 2e - summary PCL recall (auRank?)
-pclds <- readRDS("../data/pclds.rds")
+pclds <- readRDS("data/pclds.rds")
 
 pclcells <- sapply(strsplit(sapply(strsplit(list.files(l1kdir, pattern="L1Kmetric"), "cell="), 
                                    FUN=function(x) x[[2]]), ".rds"), FUN=function(x) x[[1]])

@@ -63,12 +63,12 @@ if (!file.exists(file.path(outdir, "../figspaper_res/cpSummaryRes.rds"))){
   
   brayXvalLabs <- c("brayxval_10x20", "brayxval_5x50") #, ", "lincs2_10x5")
   
-  xvalres <- list()
+  cpxvalres <- list()
   for (ii in seq_along(brayXvalSets)){
     myxvalset <- brayXvalSets[[ii]]
     modlab <- brayXvalLabs[ii]
     xvalds <- readRDS(myxvalset[grep("rds", myxvalset)])
-    xvalres[[ii]] <- getCPXvalReps(brayds$ds, brayds$metads, xvalds$myfolds, myxvalset[-length(myxvalset)], modlab)
+    cpxvalres[[ii]] <- getCPXvalReps(brayds$ds, brayds$metads, xvalds$myfolds, myxvalset[-length(myxvalset)], modlab)
   }
   
   lincs1XvalSets <- list(file.path(cpdir, "lincs/models", list.files(file.path(cpdir, "lincs/models"), pattern="lincsxval_a549_2016_dmso_epch=10_folds=5")))
@@ -78,7 +78,7 @@ if (!file.exists(file.path(outdir, "../figspaper_res/cpSummaryRes.rds"))){
     myxvalset <- lincs1XvalSets[[ii]]
     modlab <- lincs1XvalLabs[ii]
     xvalds <- readRDS(myxvalset[grep("rds", myxvalset)])
-    xvalres[[length(xvalres)+1]] <- getCPXvalReps(lincsds1$ds, lincsds1$metads, xvalds$myfolds, myxvalset[-length(myxvalset)], modlab)
+    cpxvalres[[length(cpxvalres)+1]] <- getCPXvalReps(lincsds1$ds, lincsds1$metads, xvalds$myfolds, myxvalset[-length(myxvalset)], modlab)
   }
   
   # Add LINCS2
@@ -114,7 +114,7 @@ if (!file.exists(file.path(outdir, "../figspaper_res/cpSummaryRes.rds"))){
                       lincs2Reps_A549=lincs2Reps_A549,
                       lincs2Reps_MCF7=lincs2Reps_MCF7,
                       lincs2Reps_U2OS=lincs2Reps_U2OS,
-                      xvalres=xvalres, 
+                      cpxvalres=cpxvalres, 
                       brayMoA=brayMoA,
                       lincs1MoA=lincs1MoA,
                       lincs2MoA=lincs2MoA,
@@ -134,15 +134,15 @@ if (!file.exists(file.path(outdir, "../figspaper_res/cpSummaryRes.rds"))){
 
 # xval summary
 # use bray5x50
-brayAUCML <- sapply(xvalres[[2]]$mlRanks, FUN=function(x) 1 - mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(x))))))
-brayAUCCos <- sapply(xvalres[[2]]$cosRanks, FUN=function(x) 1 - mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(x))))))
+brayAUCML <- sapply(cpxvalres[[2]]$mlRanks, FUN=function(x) 1 - mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(x))))))
+brayAUCCos <- sapply(cpxvalres[[2]]$cosRanks, FUN=function(x) 1 - mean(sapply(seq(100), FUN=function(z) mean(unlist(balancedSample(x))))))
 
-brayFDRML <- data.frame(fdr01=sapply(xvalres[[2]]$mlRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.01)))),
-                        fdr05=sapply(xvalres[[2]]$mlRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.05)))),
-                        fdr10=sapply(xvalres[[2]]$mlRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.10)))))
-brayFDRCos <- data.frame(fdr01=sapply(xvalres[[2]]$cosRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.01)))),
-                        fdr05=sapply(xvalres[[2]]$cosRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.05)))),
-                        fdr10=sapply(xvalres[[2]]$cosRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.10)))))
+brayFDRML <- data.frame(fdr01=sapply(cpxvalres[[2]]$mlRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.01)))),
+                        fdr05=sapply(cpxvalres[[2]]$mlRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.05)))),
+                        fdr10=sapply(cpxvalres[[2]]$mlRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.10)))))
+brayFDRCos <- data.frame(fdr01=sapply(cpxvalres[[2]]$cosRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.01)))),
+                        fdr05=sapply(cpxvalres[[2]]$cosRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.05)))),
+                        fdr10=sapply(cpxvalres[[2]]$cosRanks, FUN=function(x) mean(sapply(seq(10), FUN=function(z) mean(p.adjust(unlist(balancedSample(x)), "fdr") < 0.10)))))
 
 
 
@@ -164,7 +164,17 @@ moaCPdf <- rbind(moaCPdf, summarizeCPMoA(lincs2MoAByCellHighDose$A549, dsname="L
 moaCPdf <- rbind(moaCPdf, summarizeCPMoA(lincs2MoAByCellHighDose$MCF7, dsname="Lincs2 MoA High Dose MCF7"))
 moaCPdf <- rbind(moaCPdf, summarizeCPMoA(lincs2MoAByCellHighDose$U2OS, dsname="Lincs2 MoA High Dose U2OS"))
 
+fdrdf <- rbind(data.frame(dataset="CDRP Replicate fdr=0.05", method="ML", sp=brayFDRML$fdr05), 
+               data.frame(dataset="CDRP Replicate fdr=0.05", method="Cos", sp=brayFDRCos$fdr05),
+               data.frame(dataset=("CDRP MoA fdr=0.05"), method=moaCPdf$method[1:2], sp=moaCPdf[1:2, 4]), 
+               data.frame(dataset=("CDRP MoA fdr=0.1"), method=moaCPdf$method[1:2], sp=moaCPdf[1:2, 5]), 
+               data.frame(dataset=("CDRP MoA fdr=0.25"), method=moaCPdf$method[1:2], sp=moaCPdf[1:2, 6]))
+fdrdf$dataset <- factor(fdrdf$dataset, levels=c("CDRP Replicate fdr=0.05", "CDRP MoA fdr=0.05", 
+                                                "CDRP MoA fdr=0.1", "CDRP MoA fdr=0.25"))
 
+aucdf <- rbind(data.frame(dataset="CDRP Replicate", method="ML", auROC=brayAUCML), 
+               data.frame(dataset="CDRP Replicate", method="Cos", auROC=brayAUCCos),
+               moaCPdf[1:2, c(1,2,3)])
 
 ##### Fig 3a - Cell Painting Cosine
 
@@ -226,18 +236,6 @@ dev.off()
 
 
 # Fig 3b: Cross validation
-
-fdrdf <- rbind(data.frame(dataset="CDRP Replicate fdr=0.05", method="ML", sp=brayFDRML$fdr05), 
-               data.frame(dataset="CDRP Replicate fdr=0.05", method="Cos", sp=brayFDRCos$fdr05),
-               data.frame(dataset=("CDRP MoA fdr=0.05"), method=moaCPdf$method[1:2], sp=moaCPdf[1:2, 4]), 
-               data.frame(dataset=("CDRP MoA fdr=0.1"), method=moaCPdf$method[1:2], sp=moaCPdf[1:2, 5]), 
-               data.frame(dataset=("CDRP MoA fdr=0.25"), method=moaCPdf$method[1:2], sp=moaCPdf[1:2, 6]))
-fdrdf$dataset <- factor(fdrdf$dataset, levels=c("CDRP Replicate fdr=0.05", "CDRP MoA fdr=0.05", 
-                                                "CDRP MoA fdr=0.1", "CDRP MoA fdr=0.25"))
-
-aucdf <- rbind(data.frame(dataset="CDRP Replicate", method="ML", auROC=brayAUCML), 
-               data.frame(dataset="CDRP Replicate", method="Cos", auROC=brayAUCCos),
-               moaCPdf[1:2, c(1,2,3)])
 
 pdf(file=file.path(outdir, "fig3_CPAUCsummary.pdf"), width=5, height=6)
 ggplot(aucdf, aes(x=factor(dataset, levels=c("CDRP Replicate", "CDRP MoA")), y=auROC, fill=method)) + geom_bar(stat="identity", position="dodge") + 
@@ -375,7 +373,7 @@ pdf(file.path(outdir, "fig4_CPBray_MoASNR_scatter.pdf"), width=8, height=6)
 ggplot(BrayMoADF[BrayMoADF$pclSize > 50, ], aes(x=cosSNR, y=mlSNR)) + geom_point(aes(size=log10(pclSize)), color="blue") + 
   theme_minimal() + geom_abline(slope=1, intercept=0, linetype="dashed", color="black") + 
   geom_text_repel(aes(label=pcl, size=2)) + xlab("Cosine SNR") + ylab("Metric learning SNR") + 
-  ggtitle("CDRP MoA SNR") + xlim(c(0,5)) + ylim(c(0,5))
+  ggtitle("CDRP MoA SNR")
 dev.off()
 
 ggplot(pclsnrDF[pclsnrDF$size > 50,], aes(x=Cos, y=ML, color=cellid)) + geom_point(aes(size=log10(size)), alpha=0.8) + 

@@ -247,9 +247,7 @@ innerProductPairwiseGroups <- function(model, mat1, classes, sets, compact=0){
       
       mysim <- innerProduct(model, mat1[jx,], mat1[jx,])
       setSims[[ii]] <- (mysim[upper.tri(mysim)])[filt]
-    } else {
-      setSims[[ii]] <- NA
-    }
+    } 
   }
   
   if (!is.null(names(sets))){
@@ -379,16 +377,14 @@ listify <- function(mylist, myvec){
   mylengths <- sapply(mylist, length)
   mynames <- names(mylist)
   
-  newlist <- list()
+  newlist <- vector("list", length(mylist))
   # Need to vectorize, but for the lists of interest, this is not costly
   ix <- 1
   for (ii in seq_along(mylist)){
     if (mylengths[ii] > 0){
       newlist[[ii]] <- myvec[ix:(ix + mylengths[ii]-1)]
       ix <- ix + mylengths[ii]
-    } else {
-      newlist[[ii]] <- NULL
-    }
+    } 
   }
   names(newlist) <- mynames
   return(newlist)
