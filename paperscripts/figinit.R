@@ -8,6 +8,8 @@ library(reshape2)
 library(hexbin)
 library(RColorBrewer)
 library(ggrepel)
+library(gridExtra)
+
 
 ### This is a script to generate figures for the manuscript.
 

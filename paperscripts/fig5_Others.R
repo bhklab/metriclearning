@@ -44,6 +44,7 @@ for (mycell in eigencells){
 
 
 # Ghetto plots
+pdf(file.path(outdir, "fig5_eigenvalueDistributionFigures.pdf"), width=8, height=6)
 plot(-100, -100, xlim=c(0, 978), ylim=c(-5, 0), xlab="Eigenvalue index", ylab="Percent Variance explained", main="Eigenvalues of L1000 data distribution")
 for (ii in seq_along(eigendata)){
   lines(log10(eigendata[[ii]]$pctvarBase), col="blue", type="l", lwd=2)
@@ -63,7 +64,7 @@ for (ii in seq_along(eigendata)){
   lines(cumsum(eigendata[[ii]]$pctvarML), col="red", type="l", lwd=2)
 }
 legend(x="bottomright", legend=c("Base (cosine)", "Embedding (ML)"), col=c("blue", "red"), lwd=c(3,3))
-
+dev.off()
 
 
 # Centering is inappropriate because we are taking inner products in the uncentered space. 

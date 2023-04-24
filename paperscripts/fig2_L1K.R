@@ -3,6 +3,7 @@ source("paperFigFuncs.R")
 source("../learningFunctions.R")
 
 
+
 #### Figure 2: L1000 performance ####
 
 l1kdir <- file.path(topdir, "modelRuns")
@@ -390,3 +391,41 @@ ggplot(l1kCounts, aes(x=compounds, y=signatures, color=cellLine)) + geom_point(s
   xlab("Unique Compounds") + ylab("Compound Signatures") + ggtitle("Number of Signatures and Unique Compounds in L1000 dataset (2020) by Cell Line") 
 dev.off()
 
+
+# xvalres <- readRDS(file.path(outdir, "../figspaper_res/L1K_xvalres.rds"))
+
+cpPairs <- sapply(xvalres, FUN=function(x) 
+                unlist(sapply(x$inProdReps, FUN=function(y) 
+                  sapply(y$same, length))))
+cpBalPairs <- sapply(xvalres, FUN=function(x) 
+                unlist(sapply(x$inProdReps, FUN=function(y) 
+                  sapply(balancedSample(y$same, k = 100), length))))
+
+mycols <- rainbow(13)
+
+pdf(file=file.path(outdir, "Sfig_L1K_balAUROC.pdf"), width=8, height=6)
+plot(-100, -100, xlim=c(0,1), ylim=c(0,1), xlab="Fraction of Compounds", ylab="Cumulative Pairs", main="Cumulative distribution of pair counts for L1000 compounds")
+for (ii in seq(13)){
+  lines(seq(0,1,1/(length(cpPairs[[ii]])-1)), cumsum(sort(cpPairs[[ii]], decreasing=TRUE))/sum(cpPairs[[ii]]), col=mycols[[ii]], type="l")
+  lines(seq(0,1,1/(length(cpBalPairs[[ii]])-1)), cumsum(sort(cpBalPairs[[ii]], decreasing=TRUE))/sum(cpBalPairs[[ii]]), col=mycols[[ii]], type="l", lty=5)
+}
+legend(x="bottomright", legend=names(cpPairs), col=mycols, lwd=2)
+legend(x="bottom", legend=c("all Pairs", "balanced Sample"), lwd=2, lty=c(1,5))
+grid()
+dev.off()
+
+colPairAUC <- data.frame()
+for (ii in seq(13)){
+  allAUC <- mean(cumsum(sort(cpPairs[[ii]], decreasing=TRUE))/sum(cpPairs[[ii]]))
+  balAUC <- mean(cumsum(sort(cpBalPairs[[ii]], decreasing=TRUE))/sum(cpBalPairs[[ii]]))
+  
+  all50pct <- min(which(cumsum(sort(cpPairs[[ii]], decreasing=TRUE))/sum(cpPairs[[ii]]) > 0.5))
+  bal50pct <- min(which(cumsum(sort(cpBalPairs[[ii]], decreasing=TRUE))/sum(cpBalPairs[[ii]]) > 0.5))
+  
+  colPairAUC <- rbind(colPairAUC, data.frame(cell_id =names(cpPairs)[[ii]], allAUC=allAUC, balAUC=balAUC, all50pct=all50pct, bal50pct=bal50pct))
+}
+
+
+pdf(file=file.path(outdir, "STab_L1K_balAUROC.pdf"), width=5, height=6)
+grid.table(tibble(colPairAUC), rows = NULL)
+dev.off()
