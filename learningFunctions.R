@@ -133,8 +133,11 @@ innerProduct <- function(model, mat1, mat2){
 cosine <- function(mat1, mat2){
   a <- mat1 %*% t(mat2)
   
-  mag1 <- sqrt(diag(mat1 %*% t(mat1)))
-  mag2 <- sqrt(diag(mat2 %*% t(mat2)))
+  #mag1 <- sqrt(diag(mat1 %*% t(mat1)))
+  #mag2 <- sqrt(diag(mat2 %*% t(mat2)))
+  
+  mag1 <- sqrt(sapply(seq_len(dim(mat1)[1]), FUN=function(j) sum(mat1[j,]^2)))
+  mag2 <- sqrt(sapply(seq_len(dim(mat2)[1]), FUN=function(j) sum(mat2[j,]^2)))
   
   return(a/outer(mag1, mag2, "*"))
 }
@@ -350,7 +353,7 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
 
 #' rankVectors
 #' 
-#' rank_vectors - given two vectors a and b, find for each element k of a: mean(b > k)
+#' rankVectors - given two vectors a and b, find for each element k of a: mean(b > k)
 #' That is, find the percent rank within b of each element of a.  O(|a|+|b|) time.
 #' 
 #' @export
@@ -370,9 +373,9 @@ rankVectors <- function(a,b){
   return(arank)
 }
 
-
-# Takes a vector and a list and maps the vector into the same structure as the list
-# equivalent to relisting and unlisted list.
+#' listify
+#' listify - takes a vector and a list and maps the vector into the same structure as the list
+#' equivalent to relisting and unlisted list.
 listify <- function(mylist, myvec){
   mylengths <- sapply(mylist, length)
   mynames <- names(mylist)
@@ -390,3 +393,9 @@ listify <- function(mylist, myvec){
   return(newlist)
 }
 
+
+#' matLength
+#' matLength - takes a matrix and computes the Euclidean length of each row
+matLength <- function(mat1){
+  return(sqrt(sapply(seq_len(dim(mat1)[1]), FUN=function(j) sum(mat1[j,]^2))))
+}

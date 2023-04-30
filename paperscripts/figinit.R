@@ -28,4 +28,6 @@ lincspath <- "~/Work/bhk/data/cellpainting/lincs-cell-painting/lincs-cell-painti
 lincs1 <- file.path(lincspath, "2016_04_01_a549_48hr_batch1_dmso_spherized_profiles_with_input_normalized_by_dmso.rds")
 lincs2 <- file.path(lincspath, "2017_12_05_Batch2_dmso_spherized_profiles_with_input_normalized_by_dmso.rds")
 
+hmarks <- parse_gmt(file.path(datapath, "../../msigdb/h.all.v2023.1.Hs.entrez.gmt"))
+
 cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7") #, "#F0E442"

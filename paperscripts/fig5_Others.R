@@ -10,9 +10,58 @@ eigencells <- c("A375", "A549", "HA1E", "MCF10A", "MCF7", "PC3", "VCAP", "ASC", 
 eigencells <- sort(eigencells)
 fmodels <- list.files(file.path(l1kdir, "models"), pattern="L1Kmetric_")
 
-eigendata <- list()
+if (!file.exists(file.path(outdir, "../figspaper_res", "eigenvaluedata.rds"))){
+  eigendata <- list()
+  
+  for (mycell in eigencells){
+    ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
+    
+    print(sprintf("%s: %s", mycell, fmodels[grep(mycell, fmodels)]))
+    
+    mymodel <- torch_load(file.path(l1kdir, "models", fmodels[grep(mycell, fmodels)]))
+    modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
+    
+    # Centering is inappropriate because we are taking inner products in the uncentered space. 
+    system.time(pcBase <- prcomp(t(ds@mat), center=FALSE))
+    pcML <- prcomp(modelmat, center=FALSE)
+    
+    pctvarBase <- pcBase$sdev^2/sum(pcBase$sdev^2)
+    pctvarML <- pcML$sdev^2/sum(pcML$sdev^2)
+    
+    x <- t(ds@mat) %*% pcBase$rotation
+    mlRotation <- as.matrix(mymodel(torch_tensor(t(pcBase$rotation), dtype=torch_float())))
+    xML <- modelmat %*% t(mlRotation)
+    
+    # CHECK: Is this correct? Not sure we want to compute the sd of the projection of the datasets onto the PCs
+    origPCVars <- apply(x, 2, sd)^2
+    mlPCVars <- apply(xML, 2, sd)^2
+    
+    origPCVarPct <- origPCVars/sum(origPCVars)
+    mlPCVarPct <- mlPCVars/sum(mlPCVars)
+    
+    eigendata[[mycell]] <- list(pcBase=pcBase[c("sdev", "rotation")], pcML=pcML[c("sdev", "rotation")], 
+                                pctvarBase=pctvarBase, pctvarML=pctvarML,
+                                origPCVars=origPCVars, mlPCVars=mlPCVars)
+  }
+  
+  saveRDS(eigendata, file=file.path(outdir, "../figspaper_res", "eigenvaluedata.rds"))
+  
+} else {
+  eigendata <- readRDS(file.path(outdir, "../figspaper_res", "eigenvaluedata.rds"))
+}
 
+
+#### Get hallmark variance
+# hmarks loaded in figinit
+hmarkVar <- list()
+hmarkVarRand <- list()
+
+# Consider pct variance along unit vector pointing in direction of each hallmark geneset.
+# This is necessarily extraordinarily limited; better probably would be to consider the *subspace*
+# corresponding to the genes in the hallmark geneset
 for (mycell in eigencells){
+  hmarkCell <- data.frame()
+  hmarkCellRand <- data.frame()
   ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
   
   print(sprintf("%s: %s", mycell, fmodels[grep(mycell, fmodels)]))
@@ -20,27 +69,100 @@ for (mycell in eigencells){
   mymodel <- torch_load(file.path(l1kdir, "models", fmodels[grep(mycell, fmodels)]))
   modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
   
-  # Centering is inappropriate because we are taking inner products in the uncentered space. 
-  system.time(pcBase <- prcomp(t(ds@mat), center=FALSE))
-  pcML <- prcomp(modelmat, center=FALSE)
+  pcML <- eigendata[[mycell]]
   
-  pctvarBase <- pcBase$sdev^2/sum(pcBase$sdev^2)
-  pctvarML <- pcML$sdev^2/sum(pcML$sdev^2)
+  lengthBase <- matLength(t(ds@mat))
+  lengthML <- matLength(modelmat)
   
-  x <- t(ds@mat) %*% pcBase$rotation
-  mlRotation <- as.matrix(mymodel(torch_tensor(t(pcBase$rotation), dtype=torch_float())))
-  xML <- modelmat %*% t(mlRotation)
-  
-  origPCVars <- apply(x, 2, sd)^2
-  mlPCVars <- apply(xML, 2, sd)^2
-  
-  origPCVarPct <- origPCVars/sum(origPCVars)
-  mlPCVarPct <- mlPCVars/sum(mlPCVars)
-  
-  eigendata[[mycell]] <- list(pcBase=pcBase[c("sdev", "rotation")], pcML=pcML[c("sdev", "rotation")], 
-                              pctvarBase=pctvarBase, pctvarML=pctvarML,
-                              origPCVars=origPCVars, mlPCVars=mlPCVars)
+  for (ii in seq_along(hmarks)){
+    print(ii)
+    # unit vector
+    hvec <- as.numeric(ds@rid %in% hmarks[[ii]]$entry)/sqrt(sum(ds@rid %in% hmarks[[ii]]$entry))
+    
+    rvec <- as.numeric(ds@rid %in% sample(ds@rid, sum(ds@rid %in% hmarks[[ii]]$entry)))/sqrt(sum(sum(ds@rid %in% hmarks[[ii]]$entry)))
+    
+    hvecRot <- as.matrix(mymodel(torch_tensor(hvec, dtype=torch_float())))
+    hvecScale <- sqrt(sum(hvecRot^2))
+    hvecRot <- hvecRot/sqrt(sum(hvecRot^2))
+    
+    rvecRot <- as.matrix(mymodel(torch_tensor(rvec, dtype=torch_float())))
+    rvecScale <- sqrt(sum(rvecRot^2))
+    rvecRot <- rvecRot/sqrt(sum(rvecRot^2))
+    
+    hprodBase <- t(ds@mat) %*% hvec
+    hprodML <- modelmat %*% hvecRot
+    
+    rprodBase <- t(ds@mat) %*% rvec
+    rprodML <- modelmat %*% rvecRot
+    
+    hmarkCell <- rbind(hmarkCell, data.frame(hmarkSet=hmarks[[ii]]$head, 
+                                             cellid=mycell, 
+                                             baseVar=sum(hprodBase^2)/sum(lengthBase^2), 
+                                             mlVar=sum(hprodML^2)/sum(lengthML^2),
+                                             hvecScale=hvecScale, 
+                                             maxeigen=pcML$sdev[1]))
+    
+    hmarkCellRand <- rbind(hmarkCellRand, data.frame(hmarkSet=sprintf("%s:%s", hmarks[[ii]]$head, "random"), 
+                                                     cellid=mycell,
+                                                     baseVar=sum(rprodBase^2)/sum(lengthBase^2), 
+                                                     mlVar=sum(rprodML^2)/sum(lengthML^2),
+                                                     rvecScale=rvecScale, 
+                                                     maxeigen=pcML$sdev[1]))
+
+  }
+  hmarkVar[[mycell]] <- hmarkCell
+  hmarkVarRand[[mycell]] <- hmarkCellRand
 }
+
+# Revised embedding along unit vector pointing in direction of each hallmark geneset
+hVarEmbed <- list()
+
+for (mycell in eigencells){
+  hmarkCell <- data.frame()
+  
+  ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
+  
+  print(sprintf("%s: %s", mycell, fmodels[grep(mycell, fmodels)]))
+  
+  mymodel <- torch_load(file.path(l1kdir, "models", fmodels[grep(mycell, fmodels)]))
+  modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
+  
+  svdmat <- svd(as.matrix(mymodel$fc1$weight))
+  
+  embedmat <- svdmat$v %*% diag(svdmat$d) %*% t(svdmat$v) %*% ds@mat
+  
+  lengthBase <- matLength(t(ds@mat))
+  lengthML <- matLength(t(embedmat))
+  
+  for (ii in seq_along(hmarks)){
+    print(ii)
+    # unit vector
+    hvec <- as.numeric(ds@rid %in% hmarks[[ii]]$entry)/sqrt(sum(ds@rid %in% hmarks[[ii]]$entry))
+    hsize <- sum(ds@rid %in% hmarks[[ii]]$entry)
+    
+    hprodBase <- t(ds@mat) %*% hvec
+    hprodML <- t(embedmat) %*% hvec
+    
+    if (hsize > 1){
+      hvarBase <- colSums(ds@mat[which(hvec > 0), ]^2)
+      hvarML <- colSums(embedmat[which(hvec > 0), ]^2)
+    }
+    
+    hmarkCell <- rbind(hmarkCell,
+                       data.frame(hmarkSet=hmarks[[ii]]$head, 
+                                  size=hsize, 
+                                  cellid=mycell, 
+                                  baseVar=sum(hprodBase^2)/sum(lengthBase^2), 
+                                  mlVar=sum(hprodML^2)/sum(lengthML^2), 
+                                  subspVarbase=sum(hvarBase)/sum(lengthBase^2),
+                                  subspVarML=sum(hvarML)/sum(lengthML^2)))
+    
+  }
+  hVarEmbed[[mycell]] <- hmarkCell
+  
+}
+
+
 
 
 # Ghetto plots
@@ -65,6 +187,19 @@ for (ii in seq_along(eigendata)){
 }
 legend(x="bottomright", legend=c("Base (cosine)", "Embedding (ML)"), col=c("blue", "red"), lwd=c(3,3))
 dev.off()
+
+
+pcdf <- data.frame(cellid=names(eigendata), 
+                   pc95=c(sapply(eigendata, FUN=function(x) min(which(cumsum(x$pcBase$sdev^2/sum(x$pcBase$sdev^2)) > 0.95))), 
+                          sapply(eigendata, FUN=function(x) min(which(cumsum(x$pcML$sdev^2/sum(x$pcML$sdev^2)) > 0.95)))), 
+                   pc5e3=c(sapply(eigendata, FUN=function(x) sum((x$pcBase$sdev^2/sum(x$pcBase$sdev^2) > 0.005))), 
+                           sapply(eigendata, FUN=function(x) sum((x$pcML$sdev^2/sum(x$pcML$sdev^2) > 0.005)))),
+                   pc1e2=c(sapply(eigendata, FUN=function(x) sum((x$pcBase$sdev^2/sum(x$pcBase$sdev^2) > 0.01))), 
+                           sapply(eigendata, FUN=function(x) sum((x$pcML$sdev^2/sum(x$pcML$sdev^2) > 0.01)))),
+                   space=c(rep("Base", 14), rep("ML", 14)))
+
+ggplot(pcdf, aes(x=cellid, y=pc95, fill=space)) + geom_bar(stat="identity", position="dodge") + theme_minimal() + ggtitle("Number of PCs needed to account for 95% of variance")
+ggplot(pcdf, aes(x=cellid, y=pc5e3, fill=space)) + geom_bar(stat="identity", position="dodge") + theme_minimal() + ggtitle("Number of PCs with at least 0.5% of variance")
 
 
 # Centering is inappropriate because we are taking inner products in the uncentered space. 
@@ -198,7 +333,4 @@ botplot <- ggplot(l1kdf, aes(x=ngenes, y=effectDim)) + geom_point(position="jitt
   xlab("Number of Genes") + ylab("Dimensional Equivalent") + geom_smooth(method="loess")
 grid.arrange(topplot, botplot)
 dev.off()
-
-
-
 
