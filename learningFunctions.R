@@ -355,7 +355,7 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
 #' 
 #' rankVectors - given two vectors a and b, find for each element k of a: mean(b > k)
 #' That is, find the percent rank within b of each element of a.  O(|a|+|b|) time.
-#' 
+#' This handles ties by putting all elements of b after all elements of a. 
 #' @export
 rankVectors <- function(a,b){
   if (length(b) == 0){

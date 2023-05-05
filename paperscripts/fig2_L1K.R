@@ -8,7 +8,7 @@ source("../learningFunctions.R")
 
 l1kdir <- file.path(topdir, "modelRuns")
 
-### Fig 2a - cosine similarity for replicates vs all
+#### Fig 2a - cosine similarity for replicates vs all ####
 # Pick a representative cell line, say A375
 
 ##mymod <- torch::torch_load(file.path(l1kdir, "models", "L1Kmetric_epch=20_cell=A375_model.pt"))
@@ -52,7 +52,7 @@ legend(x="topright", legend=c("Metric learning replicates", "Metric Learning all
        lty=c(1,1,5,5))
 dev.off()
 
-### Fig 2b - one example of cross validated replicate recall curves
+#### Fig 2b - one example of cross validated replicate recall curves ####
 
 pdf(file.path(outdir, sprintf("fig2b_%s_xvalBalRankCDF.pdf", mycell)), width=8, height=6)
 plot(c(-10), c(-10), xlim=c(0,1), ylim=c(0,1), xlab="Balanced Rank", ylab="Cumulative Fraction", 
@@ -69,7 +69,7 @@ dev.off()
 
 
 
-### Fig 2c - summary cross validated replicate recall (bar plots, auRank)
+#### Fig 2c - summary cross validated replicate recall (bar plots, auRank) ####
 
 # Get cell names
 mycells <- sapply(strsplit(sapply(strsplit(list.files(l1kdir, pattern="L1Kxval"), "cell="), 
@@ -101,7 +101,7 @@ if (!file.exists(file.path(outdir, "../figspaper_res", "L1K_xvalres.rds"))){
   xvalres <- readRDS(file.path(outdir, "../figspaper_res/L1K_xvalres.rds"))
 }
 
-### mean balanced AUC
+#### mean balanced AUC ####
 # Consider also plotting all 100 balanced AUCs rather than taking the mean for each fold
 # The results are stored as ranks on [0,1], where 0 is the best rank. 
 # To convert to AUC, take 1 - mean balanced rank.
@@ -230,7 +230,7 @@ dev.off()
 # mean average precision? (Moshkov)
 # folds of enrichment (Moshkov)
 
-#### Fig 2e - summary PCL recall (auRank?)
+#### Fig 2e - summary PCL recall (auRank?) ####
 pclds <- readRDS("data/pclds.rds")
 
 pclcells <- sapply(strsplit(sapply(strsplit(list.files(l1kdir, pattern="L1Kmetric"), "cell="), 
@@ -295,6 +295,29 @@ if (!file.exists(file.path(outdir, "../figspaper_res/L1K_PCLRes.rds"))){
   L1K_PCLRes <- readRDS(file.path(outdir, "../figspaper_res/L1K_PCLRes.rds"))
   attach(L1K_PCLRes)
 }
+
+
+# Alt metric PCLres
+if (!file.exists(file.path(outdir, "../figspaper_res/L1K_PCLResAltMetrics.rds"))){
+  pclresAlt <- list()
+  
+  for (ii in seq_along(pclcells)){
+    acell <- pclcells[ii]
+    print(acell)
+    modelds <- readRDS(file.path(l1kdir, list.files(l1kdir, pattern=sprintf("L1Kmetric.*%s.rds", acell))))
+    f <- list.files(file.path(l1kdir, "models"), pattern=sprintf("L1Kmetric.*%s", acell))
+    
+    pclresAlt[[acell]] <- getL1KMoA(datapath, l1kmeta, acell, mymodel=file.path(l1kdir, "models", f[1]), pclds=pclds, altMets=TRUE)
+  }
+  
+  saveRDS(list(pclresAlt=pclresAlt), 
+          file=file.path(outdir, "../figspaper_res/L1K_PCLResAltMetrics.rds"))
+} else {
+  L1K_PCLResAlt <- readRDS(file.path(outdir, "../figspaper_res/L1K_PCLResAltMetrics.rds"))
+  attach(L1K_PCLResAlt)
+}
+
+
 
 pdf(file.path(outdir, "fig2e_L1KMoAMeanBalAUC.pdf"), width=8, height=6)
 ggplot(rbind(data.frame(method="ml", auc=L1KMOABalAUCML, cell=names(L1KMOABalAUCML)), 
@@ -374,7 +397,7 @@ dev.off()
 
 
 
-# Supp Figs - L1000 
+##### Supp Figs - L1000 #####
 
 cpCounts <- sapply(pclcells, FUN=function(x) length(unique(siginfo$pert_iname[siginfo$cell_id == x & siginfo$pert_type == "trt_cp"])))
 sigCounts <- sapply(pclcells, FUN=function(x) sum(siginfo$cell_id == x & siginfo$pert_type == "trt_cp"))
@@ -385,10 +408,35 @@ l1kCounts <- rbind(l1kCounts, data.frame(cellLine="all",
                                          compounds=length(unique(siginfo$pert_iname[siginfo$pert_type == "trt_cp"])), 
                                          signatures=sum(siginfo$pert_type == "trt_cp")))
 
+
+l1kCountsAll <- data.frame(cellLine = unique(siginfo$cell_id[siginfo$pert_type == "trt_cp"]), 
+                           compounds = sapply(unique(siginfo$cell_id[siginfo$pert_type == "trt_cp"]), 
+                                              FUN=function(x) length(unique(siginfo$pert_iname[siginfo$cell_id == x & siginfo$pert_type == "trt_cp"]))),
+                           signatures = sapply(unique(siginfo$cell_id[siginfo$pert_type == "trt_cp"]), 
+                                               FUN=function(x) sum(siginfo$cell_id == x & siginfo$pert_type == "trt_cp")))
+
+l1kCountsTop <- l1kCountsAll[l1kCountsAll$signatures > 2500, ]
+l1kCountsTop <- rbind(l1kCountsTop, data.frame(cellLine="other",
+                                               compounds=0, 
+                                               signatures=sum(siginfo$pert_type == "trt_cp") - sum(l1kCountsTop$signatures)))
+l1kCountsTop$cellLine <- factor(l1kCountsTop$cellLine, levels=c(l1kCountsTop$cellLine[-length(l1kCountsTop$cellLine)], "other"))
+
 pdf(file=file.path(outdir, "Sfig_L1KCompoundCountsByCell.pdf"), width=8, height=6)
 ggplot(l1kCounts, aes(x=compounds, y=signatures, color=cellLine)) + geom_point(size=2) + theme_minimal() + 
   scale_x_continuous(trans="log10", limits=c(100, 35000), breaks=c(100, 300, 1000, 3000, 10000, 30000)) + scale_y_continuous(trans="log10", limits=c(1000, 1e6)) + 
   xlab("Unique Compounds") + ylab("Compound Signatures") + ggtitle("Number of Signatures and Unique Compounds in L1000 dataset (2020) by Cell Line") 
+dev.off()
+
+pdf(file=file.path(outdir, "Sfig_L1KCompoundCountsByCellAll.pdf"), width=8, height=6)
+ggplot(l1kCounts, aes(x=compounds, y=signatures, color=cellLine)) + geom_point(data=l1kCountsAll, aes(x=compounds, y=signatures), size=1, color="grey") + 
+  geom_point(size=3) + theme_minimal() + 
+  scale_x_continuous(trans="log10", limits=c(10, 35000), breaks=c(10, 30, 100, 300, 1000, 3000, 10000, 30000)) + scale_y_continuous(trans="log10", limits=c(10, 1e6)) + 
+  xlab("Unique Compounds") + ylab("Compound Signatures") + ggtitle("Number of Signatures and Unique Compounds in L1000 dataset (2020) by Cell Line")
+dev.off()
+
+pdf(file=file.path(outdir, "Sfig_L1KCellLineBarChart.pdf"), width=6, height=6)
+ggplot(l1kCountsTop, aes(fill=cellLine, y=signatures, x=1)) + geom_bar(stat="identity") + scale_fill_manual(values=rep(cbPalette, 4)) +
+  geom_text(aes())
 dev.off()
 
 

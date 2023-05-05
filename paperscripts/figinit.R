@@ -13,7 +13,7 @@ library(gridExtra)
 
 ### This is a script to generate figures for the manuscript.
 
-source("paperFigFuncs.R")
+source("paperscripts/paperFigFuncs.R")
 
 topdir <- "~/Work/bhk/analysis/metric_learning/2022_L1K/"
 cpdir <- "~/Work/bhk/analysis/metric_learning/2022_cellpaint"
@@ -31,3 +31,4 @@ lincs2 <- file.path(lincspath, "2017_12_05_Batch2_dmso_spherized_profiles_with_i
 hmarks <- parse_gmt(file.path(datapath, "../../msigdb/h.all.v2023.1.Hs.entrez.gmt"))
 
 cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7") #, "#F0E442"
+cbPalette <- c("#999999", "#E6AF00", "#76C4E9", "#00AE93", "#F0E442", "#0092C2", "#D56E00", "#CC79A7")

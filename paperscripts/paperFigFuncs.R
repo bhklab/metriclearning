@@ -163,7 +163,7 @@ getL1KXValReps <- function(myfolds, models, datapath, l1kmeta, cellid="A375"){
 }
 
 
-getL1KMoA <- function(datapath, l1kmeta, cellid, mymodel, pclds){
+getL1KMoA <- function(datapath, l1kmeta, cellid, mymodel, pclds, altMets=FALSE){
 
   if (cellid == "all"){
     l1kmeta$siginfo$pert_iname <- sprintf("%s_%s", l1kmeta$siginfo$pert_iname, l1kmeta$siginfo$cell_id)
@@ -181,17 +181,37 @@ getL1KMoA <- function(datapath, l1kmeta, cellid, mymodel, pclds){
     ds <- parse_gctx(CMAPToolkit::get_level5_ds(datapath), rid=l1kmeta$landmarks$pr_gene_id, cid=mysigs$sig_id)
   }
   
-  mymodel <- torch::torch_load(mymodel)
-  
-  mlPCLs <- innerProductPairwiseGroups(model=mymodel, mat1=t(ds@mat), classes=mysigs$pert_iname, 
-                                           sets=pclds$pertnames, compact=1)
-  cosPCLs <- innerProductPairwiseGroups(model="cosine", mat1=t(ds@mat), classes=mysigs$pert_iname, 
-                                        sets=pclds$pertnames, compact=1)
-  
-  mlRanks <- listify(mlPCLs$setSims, rankVectors(unlist(mlPCLs$setSims), mlPCLs$allSims))
-  cosRanks <- listify(cosPCLs$setSims, rankVectors(unlist(cosPCLs$setSims), cosPCLs$allSims))
-  
-  return(list(mlPCLs=mlPCLs, cosPCLs=cosPCLs, mlRanks=mlRanks, cosRanks=cosRanks))  
+  if (altMets == FALSE){
+    mymodel <- torch::torch_load(mymodel)
+    
+    mlPCLs <- innerProductPairwiseGroups(model=mymodel, mat1=t(ds@mat), classes=mysigs$pert_iname, 
+                                             sets=pclds$pertnames, compact=1)
+    cosPCLs <- innerProductPairwiseGroups(model="cosine", mat1=t(ds@mat), classes=mysigs$pert_iname, 
+                                          sets=pclds$pertnames, compact=1)
+    
+    mlRanks <- listify(mlPCLs$setSims, rankVectors(unlist(mlPCLs$setSims), mlPCLs$allSims))
+    cosRanks <- listify(cosPCLs$setSims, rankVectors(unlist(cosPCLs$setSims), cosPCLs$allSims))
+    
+    return(list(mlPCLs=mlPCLs, cosPCLs=cosPCLs, mlRanks=mlRanks, cosRanks=cosRanks))
+  } else {
+    print("Running alternate metrics")
+    print("cosine")
+    cosPCLs <- simPairwiseGroups(metric="cosine", mat1=t(ds@mat), classes=mysigs$pert_iname, sets=pclds$pertnames, compact=1) 
+    print("wtcs")
+    wtcsPCLs <- simPairwiseGroups(metric="fastwtcs", mat1=t(ds@mat), classes=mysigs$pert_iname, sets=pclds$pertnames, compact=1)
+    print("pearson")
+    pearsonPCLs <- simPairwiseGroups(metric="pearson", mat1=t(ds@mat), classes=mysigs$pert_iname, sets=pclds$pertnames, compact=1)
+    print("spearman")
+    spearPCLs <- simPairwiseGroups(metric="spearman", mat1=t(ds@mat), classes=mysigs$pert_iname, sets=pclds$pertnames, compact=1)
+    
+    cosRanks <- listify(cosPCLs$setSims, rankVectors(unlist(cosPCLs$setSims), cosPCLs$allSims))
+    wtcsRanks <- listify(wtcsPCLs$setSims, rankVectors(unlist(wtcsPCLs$setSims), wtcsPCLs$allSims))
+    pearsonRanks <- listify(pearsonPCLs$setSims, rankVectors(unlist(pearsonPCLs$setSims), pearsonPCLs$allSims))
+    spearRanks <- listify(spearPCLs$setSims, rankVectors(unlist(spearPCLs$setSims), spearPCLs$allSims))
+    
+    return(list(cosPCLs=cosPCLs, wtcsPCLs=wtcsPCLs, pearsonPCLs=pearsonPCLs, spearPCLs=spearPCLs,
+                cosRanks=cosRanks, wtcsRanks=wtcsRanks, pearsonRanks=pearsonRanks, spearRanks=spearRanks))
+  }
 }
 
 

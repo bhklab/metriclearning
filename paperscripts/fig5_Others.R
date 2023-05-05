@@ -10,6 +10,7 @@ eigencells <- c("A375", "A549", "HA1E", "MCF10A", "MCF7", "PC3", "VCAP", "ASC", 
 eigencells <- sort(eigencells)
 fmodels <- list.files(file.path(l1kdir, "models"), pattern="L1Kmetric_")
 
+# Load the eigendata - eigenvalues of the covariance matrices of the spaces
 if (!file.exists(file.path(outdir, "../figspaper_res", "eigenvaluedata.rds"))){
   eigendata <- list()
   
@@ -48,118 +49,127 @@ if (!file.exists(file.path(outdir, "../figspaper_res", "eigenvaluedata.rds"))){
   
 } else {
   eigendata <- readRDS(file.path(outdir, "../figspaper_res", "eigenvaluedata.rds"))
+  attach(eigendata)
 }
 
 
 #### Get hallmark variance
 # hmarks loaded in figinit
-hmarkVar <- list()
-hmarkVarRand <- list()
 
-# Consider pct variance along unit vector pointing in direction of each hallmark geneset.
-# This is necessarily extraordinarily limited; better probably would be to consider the *subspace*
-# corresponding to the genes in the hallmark geneset
-for (mycell in eigencells){
-  hmarkCell <- data.frame()
-  hmarkCellRand <- data.frame()
-  ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
+if (!file.exists(file.path(outdir, "../figspaper_res", "hallmarkVariance.rds"))){
+  hmarkVar <- list()
+  hmarkVarRand <- list()
   
-  print(sprintf("%s: %s", mycell, fmodels[grep(mycell, fmodels)]))
-  
-  mymodel <- torch_load(file.path(l1kdir, "models", fmodels[grep(mycell, fmodels)]))
-  modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
-  
-  pcML <- eigendata[[mycell]]
-  
-  lengthBase <- matLength(t(ds@mat))
-  lengthML <- matLength(modelmat)
-  
-  for (ii in seq_along(hmarks)){
-    print(ii)
-    # unit vector
-    hvec <- as.numeric(ds@rid %in% hmarks[[ii]]$entry)/sqrt(sum(ds@rid %in% hmarks[[ii]]$entry))
+  # Consider pct variance along unit vector pointing in direction of each hallmark geneset.
+  # This is necessarily extraordinarily limited; better probably would be to consider the *subspace*
+  # corresponding to the genes in the hallmark geneset
+  for (mycell in eigencells){
+    hmarkCell <- data.frame()
+    hmarkCellRand <- data.frame()
+    ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
     
-    rvec <- as.numeric(ds@rid %in% sample(ds@rid, sum(ds@rid %in% hmarks[[ii]]$entry)))/sqrt(sum(sum(ds@rid %in% hmarks[[ii]]$entry)))
+    print(sprintf("%s: %s", mycell, fmodels[grep(mycell, fmodels)]))
     
-    hvecRot <- as.matrix(mymodel(torch_tensor(hvec, dtype=torch_float())))
-    hvecScale <- sqrt(sum(hvecRot^2))
-    hvecRot <- hvecRot/sqrt(sum(hvecRot^2))
+    mymodel <- torch_load(file.path(l1kdir, "models", fmodels[grep(mycell, fmodels)]))
+    modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
     
-    rvecRot <- as.matrix(mymodel(torch_tensor(rvec, dtype=torch_float())))
-    rvecScale <- sqrt(sum(rvecRot^2))
-    rvecRot <- rvecRot/sqrt(sum(rvecRot^2))
+    pcML <- eigendata[[mycell]]$pcML
     
-    hprodBase <- t(ds@mat) %*% hvec
-    hprodML <- modelmat %*% hvecRot
+    lengthBase <- matLength(t(ds@mat))
+    lengthML <- matLength(modelmat)
     
-    rprodBase <- t(ds@mat) %*% rvec
-    rprodML <- modelmat %*% rvecRot
-    
-    hmarkCell <- rbind(hmarkCell, data.frame(hmarkSet=hmarks[[ii]]$head, 
-                                             cellid=mycell, 
-                                             baseVar=sum(hprodBase^2)/sum(lengthBase^2), 
-                                             mlVar=sum(hprodML^2)/sum(lengthML^2),
-                                             hvecScale=hvecScale, 
-                                             maxeigen=pcML$sdev[1]))
-    
-    hmarkCellRand <- rbind(hmarkCellRand, data.frame(hmarkSet=sprintf("%s:%s", hmarks[[ii]]$head, "random"), 
-                                                     cellid=mycell,
-                                                     baseVar=sum(rprodBase^2)/sum(lengthBase^2), 
-                                                     mlVar=sum(rprodML^2)/sum(lengthML^2),
-                                                     rvecScale=rvecScale, 
-                                                     maxeigen=pcML$sdev[1]))
-
-  }
-  hmarkVar[[mycell]] <- hmarkCell
-  hmarkVarRand[[mycell]] <- hmarkCellRand
-}
-
-# Revised embedding along unit vector pointing in direction of each hallmark geneset
-hVarEmbed <- list()
-
-for (mycell in eigencells){
-  hmarkCell <- data.frame()
+    for (ii in seq_along(hmarks)){
+      print(ii)
+      # unit vector
+      hvec <- as.numeric(ds@rid %in% hmarks[[ii]]$entry)/sqrt(sum(ds@rid %in% hmarks[[ii]]$entry))
+      
+      rvec <- as.numeric(ds@rid %in% sample(ds@rid, sum(ds@rid %in% hmarks[[ii]]$entry)))/sqrt(sum(sum(ds@rid %in% hmarks[[ii]]$entry)))
+      
+      hvecRot <- as.matrix(mymodel(torch_tensor(hvec, dtype=torch_float())))
+      hvecScale <- sqrt(sum(hvecRot^2))
+      hvecRot <- hvecRot/sqrt(sum(hvecRot^2))
+      
+      rvecRot <- as.matrix(mymodel(torch_tensor(rvec, dtype=torch_float())))
+      rvecScale <- sqrt(sum(rvecRot^2))
+      rvecRot <- rvecRot/sqrt(sum(rvecRot^2))
+      
+      hprodBase <- t(ds@mat) %*% hvec
+      hprodML <- modelmat %*% hvecRot
+      
+      rprodBase <- t(ds@mat) %*% rvec
+      rprodML <- modelmat %*% rvecRot
+      
+      hmarkCell <- rbind(hmarkCell, data.frame(hmarkSet=hmarks[[ii]]$head, 
+                                               cellid=mycell, 
+                                               baseVar=sum(hprodBase^2)/sum(lengthBase^2), 
+                                               mlVar=sum(hprodML^2)/sum(lengthML^2),
+                                               hvecScale=hvecScale, 
+                                               maxeigen=pcML$sdev[1]))
+      
+      hmarkCellRand <- rbind(hmarkCellRand, data.frame(hmarkSet=sprintf("%s:%s", hmarks[[ii]]$head, "random"), 
+                                                       cellid=mycell,
+                                                       baseVar=sum(rprodBase^2)/sum(lengthBase^2), 
+                                                       mlVar=sum(rprodML^2)/sum(lengthML^2),
+                                                       rvecScale=rvecScale, 
+                                                       maxeigen=pcML$sdev[1]))
   
-  ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
-  
-  print(sprintf("%s: %s", mycell, fmodels[grep(mycell, fmodels)]))
-  
-  mymodel <- torch_load(file.path(l1kdir, "models", fmodels[grep(mycell, fmodels)]))
-  modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
-  
-  svdmat <- svd(as.matrix(mymodel$fc1$weight))
-  
-  embedmat <- svdmat$v %*% diag(svdmat$d) %*% t(svdmat$v) %*% ds@mat
-  
-  lengthBase <- matLength(t(ds@mat))
-  lengthML <- matLength(t(embedmat))
-  
-  for (ii in seq_along(hmarks)){
-    print(ii)
-    # unit vector
-    hvec <- as.numeric(ds@rid %in% hmarks[[ii]]$entry)/sqrt(sum(ds@rid %in% hmarks[[ii]]$entry))
-    hsize <- sum(ds@rid %in% hmarks[[ii]]$entry)
-    
-    hprodBase <- t(ds@mat) %*% hvec
-    hprodML <- t(embedmat) %*% hvec
-    
-    if (hsize > 1){
-      hvarBase <- colSums(ds@mat[which(hvec > 0), ]^2)
-      hvarML <- colSums(embedmat[which(hvec > 0), ]^2)
     }
-    
-    hmarkCell <- rbind(hmarkCell,
-                       data.frame(hmarkSet=hmarks[[ii]]$head, 
-                                  size=hsize, 
-                                  cellid=mycell, 
-                                  baseVar=sum(hprodBase^2)/sum(lengthBase^2), 
-                                  mlVar=sum(hprodML^2)/sum(lengthML^2), 
-                                  subspVarbase=sum(hvarBase)/sum(lengthBase^2),
-                                  subspVarML=sum(hvarML)/sum(lengthML^2)))
-    
+    hmarkVar[[mycell]] <- hmarkCell
+    hmarkVarRand[[mycell]] <- hmarkCellRand
   }
-  hVarEmbed[[mycell]] <- hmarkCell
   
+  # Revised embedding along unit vector pointing in direction of each hallmark geneset
+  hVarEmbed <- list()
+  
+  for (mycell in eigencells){
+    hmarkCell <- data.frame()
+    
+    ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
+    
+    print(sprintf("%s: %s", mycell, fmodels[grep(mycell, fmodels)]))
+    
+    mymodel <- torch_load(file.path(l1kdir, "models", fmodels[grep(mycell, fmodels)]))
+    modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
+    
+    svdmat <- svd(as.matrix(mymodel$fc1$weight))
+    
+    embedmat <- svdmat$v %*% diag(svdmat$d) %*% t(svdmat$v) %*% ds@mat
+    
+    lengthBase <- matLength(t(ds@mat))
+    lengthML <- matLength(t(embedmat))
+    
+    for (ii in seq_along(hmarks)){
+      print(ii)
+      # unit vector
+      hvec <- as.numeric(ds@rid %in% hmarks[[ii]]$entry)/sqrt(sum(ds@rid %in% hmarks[[ii]]$entry))
+      hsize <- sum(ds@rid %in% hmarks[[ii]]$entry)
+      
+      hprodBase <- t(ds@mat) %*% hvec
+      hprodML <- t(embedmat) %*% hvec
+      
+      if (hsize > 1){
+        hvarBase <- colSums(ds@mat[which(hvec > 0), ]^2)
+        hvarML <- colSums(embedmat[which(hvec > 0), ]^2)
+      }
+      
+      hmarkCell <- rbind(hmarkCell,
+                         data.frame(hmarkSet=hmarks[[ii]]$head, 
+                                    size=hsize, 
+                                    cellid=mycell, 
+                                    baseVar=sum(hprodBase^2)/sum(lengthBase^2), 
+                                    mlVar=sum(hprodML^2)/sum(lengthML^2), 
+                                    subspVarbase=sum(hvarBase)/sum(lengthBase^2),
+                                    subspVarML=sum(hvarML)/sum(lengthML^2)))
+      
+    }
+    hVarEmbed[[mycell]] <- hmarkCell
+  }
+  
+  saveRDS(file=file.path(outdir, "../figspaper_res", "hallmarkVariance.rds"), 
+          list(hmarkVar=hmarkVar, hmarkVarRand=hmarkVarRand, hVarEmbed=hVarEmbed))
+} else {
+  hmarkVards <- readRDS(file.path(outdir, "../figspaper_res", "hallmarkVariance.rds"))
+  attach(hmarkVards)
 }
 
 
