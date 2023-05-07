@@ -1,4 +1,4 @@
-source("figinit.R")
+source("paperscripts/figinit.R")
 
 
 
@@ -53,7 +53,7 @@ if (!file.exists(file.path(outdir, "../figspaper_res", "eigenvaluedata.rds"))){
 }
 
 
-#### Get hallmark variance
+#### Get hallmark variance - a supervised approach to a biological interpretation of changes in the gene space 
 # hmarks loaded in figinit
 
 if (!file.exists(file.path(outdir, "../figspaper_res", "hallmarkVariance.rds"))){
@@ -173,7 +173,37 @@ if (!file.exists(file.path(outdir, "../figspaper_res", "hallmarkVariance.rds")))
 }
 
 
+#### Unsupervised interpretation of biological changes in the embedded space
 
+for (mycell in eigencells){
+  ds <- parse_gctx(get_level5_ds(datapath), cid=siginfo$sig_id[siginfo$cell_id == mycell & siginfo$pert_type == "trt_cp"], rid = landmarks$pr_gene_id)
+  
+  print(sprintf("%s: %s", mycell, fmodels[grep(mycell, fmodels)]))
+  
+  mymodel <- torch_load(file.path(l1kdir, "models", fmodels[grep(mycell, fmodels)]))
+  modelmat <- as.matrix(mymodel(torch_tensor(t(ds@mat), dtype=torch_float())))
+  
+  svdmat <- svd(as.matrix(mymodel$fc1$weight))
+  
+  embedmat <- svdmat$v %*% diag(svdmat$d) %*% t(svdmat$v) %*% ds@mat
+  
+  lengthBase <- matLength(t(ds@mat))
+  lengthML <- matLength(t(embedmat))
+  
+  # Get variance in each direction of the base PCs:
+  baseMatRot <- t(ds@mat) %*% eigendata[[mycell]]$pcBase$rotation
+  embedmatRot <- t(embedmat) %*% eigendata[[mycell]]$pcBase$rotation
+  baseVar <- colMeans(baseMatRot^2)
+  embedVar <- colMeans(embedmatRot^2)
+  
+  # Have to normalize the variance, as scalar multiplication affects the computed variance:
+  baseVar <- baseVar/sum(baseVar)
+  embedVar <- embedVar/sum(embedVar)
+  
+  # Sanity check: baseVar should correlate very close to 1 with the calculated pcvar:
+  print(sprintf("Correlation of base variances (should be nearly 1): %0.4f", cor(baseVar, eigendata[[mycell]]$pcBase$sdev^2)))
+  
+}
 
 # Ghetto plots
 pdf(file.path(outdir, "fig5_eigenvalueDistributionFigures.pdf"), width=8, height=6)
