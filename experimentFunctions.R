@@ -230,7 +230,7 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10, sav
   brayMeta <- brayds$metads
   
   if (method == "xval"){
-    nFolds <- 3
+    nFolds <- 5
     brayxval <- metricCrossValidate(brayData, brayMeta$Metadata_pert_id, nFolds=nFolds, epochs=epochs) 
     saveRDS(brayxval$res_all, file=file.path(outpath, sprintf("brayxval_epch=%d_smp=%d_folds=%d.rds", epochs, round(100*subsample), nFolds)))
     
@@ -258,7 +258,6 @@ analyzeBrayData <- function(braypath, outpath=".", method="xval", epochs=10, sav
 
 analyzeLincsCPData <- function(lincspath, outpath=".", method="xval", epochs=10, saveModel=TRUE, dsname="dsA"){
   epochs <- as.numeric(epochs)
-  subsample <- as.numeric(subsample)
   
   lincsds <- loadLincsData(lincspath, splitGrps = 1)
   lincsData <- lincsds$ds
@@ -267,11 +266,11 @@ analyzeLincsCPData <- function(lincspath, outpath=".", method="xval", epochs=10,
   if (method == "xval"){
     nFolds <- 5
     lincsxval <- metricCrossValidate(lincsData, lincsMeta$Metadata_pert_iname, nFolds=nFolds, epochs=epochs) 
-    saveRDS(lincsxval$res_all, file=file.path(outpath, sprintf("lincsxval_%s_epch=%d_smp=%d_folds=%d.rds", dsname, epochs, round(100*subsample), nFolds)))
+    saveRDS(lincsxval$res_all, file=file.path(outpath, sprintf("lincsxval_%s_epch=%d_folds=%d.rds", dsname, epochs, nFolds)))
     
     if (saveModel){
       for (ii in seq_along(lincsxval$mymodels)){
-        torch_save(lincsxval$mymodel[[ii]], file.path(outpath, sprintf("lincsxval_%s_epch=%d_smp=%d_folds=%d_model%d.pt", dsname, epochs, round(100*subsample), nFolds, ii)))
+        torch_save(lincsxval$mymodel[[ii]], file.path(outpath, sprintf("lincsxval_%s_epch=%d_folds=%d_model%d.pt", dsname, epochs, nFolds, ii)))
       }
     }
     return(lincsxval)
@@ -279,14 +278,14 @@ analyzeLincsCPData <- function(lincspath, outpath=".", method="xval", epochs=10,
   } else if (method == "allds"){
     lincsmetric <- learnInnerProduct(lincsData, lincsMeta$Metadata_pert_iname, epochs=epochs)
     saveRDS(lincsmetric, file=file.path(outpath, sprintf("lincsmetric_%s_epch=%d.rds", dsname, epochs)))
-    torch_save(lincsmetric$model, file.path(outpath, sprintf("lincsmetric_%s_epch=%d_smp=%d_model.pt", dsname, epochs, round(100*subsample))))
+    torch_save(lincsmetric$model, file.path(outpath, sprintf("lincsmetric_%s_epch=%d_model.pt", dsname, epochs)))
     return(lincsmetric)
     
   } else if (method == "ntraining"){
     # Study how decreasing the amount of training data affects outcomes
     
     res <- metricNTraining(lincsData, lincsMeta$Metadata_pert_iname, epochs=epochs, reps=2)
-    saveRDS(res, file=file.path(outpath, sprintf("lincsntraining_%s_epch=%s_smp=%d.rds", dsname, epochs, round(100*subsample))))
+    saveRDS(res, file=file.path(outpath, sprintf("lincsntraining_%s_epch=%s.rds", dsname, epochs)))
     return(res)
   }
 }
@@ -305,7 +304,7 @@ analyzeNormCPData <- function(cppath, outpath=".", method="xval", epochs=10, dsn
   cpData[is.na(cpData)] <- 0
   
   if (method == "xval"){
-    nFolds <- 3
+    nFolds <- 5
     cpxval <- metricCrossValidate(cpData, cpMeta$Metadata_pert_id, nFolds=nFolds, epochs=epochs) 
     saveRDS(cpxval$res_all, file=file.path(outpath, sprintf("%scp_xval_epch=%d_folds=%d.rds", dsname, epochs, nFolds)))
     
