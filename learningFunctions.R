@@ -133,8 +133,11 @@ innerProduct <- function(model, mat1, mat2){
 cosine <- function(mat1, mat2){
   a <- mat1 %*% t(mat2)
   
-  mag1 <- sqrt(diag(mat1 %*% t(mat1)))
-  mag2 <- sqrt(diag(mat2 %*% t(mat2)))
+  #mag1 <- sqrt(diag(mat1 %*% t(mat1)))
+  #mag2 <- sqrt(diag(mat2 %*% t(mat2)))
+  
+  mag1 <- sqrt(sapply(seq_len(dim(mat1)[1]), FUN=function(j) sum(mat1[j,]^2)))
+  mag2 <- sqrt(sapply(seq_len(dim(mat2)[1]), FUN=function(j) sum(mat2[j,]^2)))
   
   return(a/outer(mag1, mag2, "*"))
 }
@@ -231,8 +234,9 @@ innerProductPairwiseGroups <- function(model, mat1, classes, sets, compact=0){
   sims <- sims[upper.tri(sims)]
     
   setSims <- list()
+  length(setSims) <- length(sets)
   
-  for (ii in length(sets)){
+  for (ii in seq_along(sets)){
     myset <- sets[[ii]]
     # Check how many elements of classes are in my set. We require at least two:
     mygrps <- intersect(classes, myset)
@@ -246,14 +250,14 @@ innerProductPairwiseGroups <- function(model, mat1, classes, sets, compact=0){
       
       mysim <- innerProduct(model, mat1[jx,], mat1[jx,])
       setSims[[ii]] <- (mysim[upper.tri(mysim)])[filt]
-    }
+    } 
   }
   
   if (!is.null(names(sets))){
     names(setSims) <- names(sets)
   }
   
-  return(setSims=setSims, allSims=sims)
+  return(list(setSims=setSims, allSims=sims))
 }
 
 
@@ -349,9 +353,9 @@ metricNTraining <- function(mat1, classes, metric="", epochs=10, nvals=c(), vali
 
 #' rankVectors
 #' 
-#' rank_vectors - given two vectors a and b, find for each element k of a: mean(b > k)
+#' rankVectors - given two vectors a and b, find for each element k of a: mean(b > k)
 #' That is, find the percent rank within b of each element of a.  O(|a|+|b|) time.
-#' 
+#' This handles ties by putting all elements of b after all elements of a. 
 #' @export
 rankVectors <- function(a,b){
   if (length(b) == 0){
@@ -367,4 +371,31 @@ rankVectors <- function(a,b){
   arank <- numeric(length(a))
   arank[myvals$ix[myvals$ix > 0]] <- 1 - myvals$count[myvals$ix > 0]/length(b)
   return(arank)
+}
+
+#' listify
+#' listify - takes a vector and a list and maps the vector into the same structure as the list
+#' equivalent to relisting and unlisted list.
+listify <- function(mylist, myvec){
+  mylengths <- sapply(mylist, length)
+  mynames <- names(mylist)
+  
+  newlist <- vector("list", length(mylist))
+  # Need to vectorize, but for the lists of interest, this is not costly
+  ix <- 1
+  for (ii in seq_along(mylist)){
+    if (mylengths[ii] > 0){
+      newlist[[ii]] <- myvec[ix:(ix + mylengths[ii]-1)]
+      ix <- ix + mylengths[ii]
+    } 
+  }
+  names(newlist) <- mynames
+  return(newlist)
+}
+
+
+#' matLength
+#' matLength - takes a matrix and computes the Euclidean length of each row
+matLength <- function(mat1){
+  return(sqrt(sapply(seq_len(dim(mat1)[1]), FUN=function(j) sum(mat1[j,]^2))))
 }

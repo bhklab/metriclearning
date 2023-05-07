@@ -87,12 +87,3 @@ benchmarkL1K_PCLs <- function(modelpath, dspath, metapath, pclpath, cell_id, out
   print("End of benchmark")
 }
 
-
-# Benchmark xval folds to get compound ranks
-benchmark_L1K_xvals <- function(modelrds, models, dspath, metapath, pclpath, cell_id, outpath=".", modelname="mymodel", mkplots=1){
-
-  
-  
-  
-  
-}
