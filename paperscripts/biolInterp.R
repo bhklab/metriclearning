@@ -1,5 +1,6 @@
 library(fgsea)
 library(CMAPToolkit)
+library(cmapR)
 
 
 
@@ -24,9 +25,9 @@ biolInterp <- function(gopath, rotmat, landmarks, nPCs=300, minGoSize=30){
 }
 
 
-runBioInterp <- function(outpath, eigenDataPath, l1kpath, gopath, nPCs=300){
+runBioInterp <- function(outpath, eigenDataPath, l1kmetapath, gopath, nPCs=300){
   
-  l1kmeta <- CMAPToolkit::read_l1k_meta(l1kpath, version=2020)
+  l1kmeta <- CMAPToolkit::read_l1k_meta(l1kmetapath, version=2020)
   attach(l1kmeta)
   
   eigendata <- readRDS(eigenDataPath)
@@ -35,7 +36,7 @@ runBioInterp <- function(outpath, eigenDataPath, l1kpath, gopath, nPCs=300){
   
   for (mycell in names(eigendata)){
     print(mycell)
-    bioRes[[mycell]] <- biolInterp(gopath=gopath, rotmat=eigendata[[mycell]]$pcBase$rotation, landmarks=landmarks)
+    bioRes[[mycell]] <- biolInterp(gopath=gopath, rotmat=eigendata[[mycell]]$pcBase$rotation, landmarks=landmarks, nPCs=nPCs)
   }
   
   saveRDS(object=bioRes, file=file.path(outpath, "bioInterpRes.rds"))
