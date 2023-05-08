@@ -18,6 +18,7 @@ source("paperscripts/paperFigFuncs.R")
 topdir <- "~/Work/bhk/analysis/metric_learning/2022_L1K/"
 cpdir <- "~/Work/bhk/analysis/metric_learning/2022_cellpaint"
 outdir <- file.path(topdir, "figspaper")
+l1kdir <- file.path(topdir, "modelRuns")
 
 datapath <- "~/Work/bhk/data/l1k/2020/"
 l1kmeta <- CMAPToolkit::read_l1k_meta(datapath, version=2020)
@@ -32,3 +33,4 @@ hmarks <- parse_gmt(file.path(datapath, "../../msigdb/h.all.v2023.1.Hs.entrez.gm
 
 cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7") #, "#F0E442"
 cbPalette <- c("#999999", "#E6AF00", "#76C4E9", "#00AE93", "#F0E442", "#0092C2", "#D56E00", "#CC79A7")
+

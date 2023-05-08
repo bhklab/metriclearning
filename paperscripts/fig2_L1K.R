@@ -5,15 +5,8 @@ source("../learningFunctions.R")
 
 
 #### Figure 2: L1000 performance ####
-
-l1kdir <- file.path(topdir, "modelRuns")
-
-#### Fig 2a - cosine similarity for replicates vs all ####
-# Pick a representative cell line, say A375
-
-##mymod <- torch::torch_load(file.path(l1kdir, "models", "L1Kmetric_epch=20_cell=A375_model.pt"))
-#xvalds <- readRDS(file.path(l1kdir, "L1Kxval_epch=10_folds=5_cell=A375.rds"))
-#f <- list.files(file.path(l1kdir, "models"), pattern="L1Kxval.*A375")
+#### Compute L1000 data: ####
+# Fig 2a: Pick a representative cell line, say A375; compute replicate distribution
 
 if (!file.exists(file.path(outdir, "../figspaper_res", "A375_SimDS.rds"))){
   mycell <- "A375"
@@ -39,6 +32,9 @@ if (!file.exists(file.path(outdir, "../figspaper_res", "A375_SimDS.rds"))){
   attach(a375simds)
 }
 
+
+#### Fig 2a - cosine similarity for replicates vs all ####
+# Pick a representative cell line, say A375
 
 pdf(file.path(outdir, sprintf("fig2a_%s_pdf.pdf", mycell)), width=8, height=6)
 plot(density(unlist(cosdiff), bw=0.01), col="forestgreen", lwd=1.5, lty=5, xlim=c(-0.5,1), 
