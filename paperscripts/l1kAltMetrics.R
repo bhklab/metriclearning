@@ -17,7 +17,8 @@ generateAltMetrics <- function(datapath, l1kmeta, outpath, pclds, pclcells) {
     
     saveRDS(list(pclresAlt=pclresAlt), file=file.path(outpath, "L1K_PCLResAltMetrics.rds"))
     
-    return(L1K_PCLResAlt)
+    return(pclresAlt)
+
   } else {
     L1K_PCLResAlt <- readRDS(file.path(outpath, "L1K_PCLResAltMetrics.rds"))
     return(L1K_PCLResAlt)
@@ -26,7 +27,7 @@ generateAltMetrics <- function(datapath, l1kmeta, outpath, pclds, pclcells) {
 
 runGenerateAltMetrics <- function(datapath, metapath, outpath, pcldspath, pclcells=c()){
   
-  l1kmeta <- CMAPToolkit::read_l1k_meta(l1kpath, version=2020)
+  l1kmeta <- CMAPToolkit::read_l1k_meta(metapath, version=2020)
 
   # Specify which cells to run here
   if (length(pclcells) == 0){
