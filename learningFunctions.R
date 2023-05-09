@@ -362,10 +362,11 @@ rankVectors <- function(a,b){
     return(numeric(length(a)))
   }
   
-  # Given two input vectors a and b, returns for each element a_i of a: how many elements of b are less than or equal to a_i
+  # Given two input vectors a and b, returns for each element a_i of a: what fraction of elements of b are greater than or equal to a_i
   myvals <- data.frame(val=sort(a), ix=order(a))
   myvals <- rbind(myvals, data.frame(val=sort(b), ix=0))
-  myvals <- myvals[order(myvals$val, myvals$ix), ]
+  myvals <- cbind(myvals, randSeed=rnorm(dim(myvals)[1]))
+  myvals <- myvals[order(myvals$val, myvals$randSeed), ]
   myvals$count <- cumsum(myvals$ix == 0)
   
   arank <- numeric(length(a))

@@ -41,3 +41,9 @@ runBioInterp <- function(outpath, eigenDataPath, l1kmetapath, gopath, nPCs=300){
   
   saveRDS(object=bioRes, file=file.path(outpath, "bioInterpRes.rds"))
 }
+
+
+
+summarizeBioInterp <- function(biointerpPath){
+  
+}

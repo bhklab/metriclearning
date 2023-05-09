@@ -44,9 +44,20 @@ lines(density(unlist(mldiff), bw=0.01), col="blue", lwd=1.5)
 lines(density(unlist(mlsame), bw=0.01), col="firebrick3", lwd=1.5)
 lines(c(0, 0), c(0, 100), col="grey", lty=2)
 legend(x="topright", legend=c("Metric learning replicates", "Metric Learning all pairs", 
-                              "Cosine replicates", "Cosine all pairs"), lwd=2.5, col=c("firebrick3", "blue", "purple", "forestgreen"), 
+                              "Cosine replicates", "Cosine all pairs"), lwd=2.5, col=c("firebrick3", "blue", "orange", "forestgreen"), 
        lty=c(1,1,5,5))
 dev.off()
+
+pdf(file.path(outdir, sprintf("fig2a_%s_cosine_pdf.pdf", mycell)), width=8, height=6)
+plot(density(unlist(cosdiff), bw=0.01), col="forestgreen", lwd=2, lty=1, xlim=c(-0.5,1), 
+     xlab="Similarity", ylab="Density", main=sprintf("%s Balanced Similarity", mycell))
+lines(density(unlist(cossame), bw=0.01), col="orange", lwd=2, lty=1)
+lines(c(0, 0), c(0, 100), col="grey", lty=2)
+legend(x="topright", legend=c("Cosine replicates", "Cosine all pairs"), lwd=2.5, col=c("orange", "forestgreen"), 
+       lty=c(1,1))
+dev.off()
+
+
 
 #### Fig 2b - one example of cross validated replicate recall curves ####
 
@@ -294,27 +305,38 @@ if (!file.exists(file.path(outdir, "../figspaper_res/L1K_PCLRes.rds"))){
 
 
 # Alt metric PCLres
-if (!file.exists(file.path(outdir, "../figspaper_res/L1K_PCLResAltMetrics.rds"))){
-  pclresAlt <- list()
-  
-  for (ii in seq_along(pclcells)){
-    acell <- pclcells[ii]
-    print(acell)
-    modelds <- readRDS(file.path(l1kdir, list.files(l1kdir, pattern=sprintf("L1Kmetric.*%s.rds", acell))))
-    f <- list.files(file.path(l1kdir, "models"), pattern=sprintf("L1Kmetric.*%s", acell))
-    
-    pclresAlt[[acell]] <- getL1KMoA(datapath, l1kmeta, acell, mymodel=file.path(l1kdir, "models", f[1]), pclds=pclds, altMets=TRUE)
-  }
-  
-  saveRDS(list(pclresAlt=pclresAlt), 
-          file=file.path(outdir, "../figspaper_res/L1K_PCLResAltMetrics.rds"))
-} else {
-  L1K_PCLResAlt <- readRDS(file.path(outdir, "../figspaper_res/L1K_PCLResAltMetrics.rds"))
-  attach(L1K_PCLResAlt)
+# Generate with l1kAltMetrics.R; add arguments below. 
+
+# runGenerateAltMetrics()
+L1K_PCLResAlt <- readRDS(file.path(outdir, "../figspaper_res/L1K_PCLResAltMetrics.rds"))
+attach(L1K_PCLResAlt)
+
+# Fix the error ranking wtcs guys because of ties
+for (mycell in names(pclresAlt)){
+  pclresAlt[[mycell]]$wtcsRanks <- listify(pclresAlt[[mycell]]$wtcsPCLs$setSims, rankVectors(unlist(pclresAlt[[mycell]]$wtcsPCLs$setSims), pclresAlt[[mycell]]$wtcsPCLs$allSims))
 }
 
+altMoAfdr <- data.frame(rbind(cbind(fdr=0.01, sapply(pclresAlt, FUN=function(mycell) sapply(mycell[5:8], FUN=function(x) mean(p.adjust(unlist(balancedSample(x, k=1000)), method="fdr") < 0.01)))),
+  cbind(fdr=0.05, sapply(pclresAlt, FUN=function(mycell) sapply(mycell[5:8], FUN=function(x) mean(p.adjust(unlist(balancedSample(x, k=1000)), method="fdr") < 0.05)))),
+  cbind(fdr=0.10, sapply(pclresAlt, FUN=function(mycell) sapply(mycell[5:8], FUN=function(x) mean(p.adjust(unlist(balancedSample(x, k=1000)), method="fdr") < 0.10))))))
+                   
 
+#### Example Alt metric comparison - FDR CDF ####
+pdf(file.path(outdir, "Sfig_L1KMoAAltMetricFDRcomparison.pdf"), width=8, height=6)
+for (mycell in names(pclresAlt)) {
+  print(mycell)
+  plot(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$cosRanks, k=1000)), method="fdr"))), col="cyan", ylab="Fraction", 
+       xlab="FDR", main=sprintf("%s Metric FDR CDF comparison", mycell), xlim=c(0,1))
+  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$wtcsRanks, k=1000)), method="fdr"))), col="orange")
+  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$pearsonRanks, k=1000)), method="fdr"))), col="purple")
+  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$spearRanks, k=1000)), method="fdr"))), col="forestgreen")
+  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclres[[mycell]]$mlRanks, k=1000)), method="fdr"))), col="black")
+  legend(x="bottomright", legend=c("Metric Learning", "Cosine", "Pearson", "Spearman", "WTCS"), 
+         col=c("black", "cyan", "purple", "forestgreen", "orange"), lwd=2)
+}
+dev.off()
 
+#### Metric Learning MoA analysis ####
 pdf(file.path(outdir, "fig2e_L1KMoAMeanBalAUC.pdf"), width=8, height=6)
 ggplot(rbind(data.frame(method="ml", auc=L1KMOABalAUCML, cell=names(L1KMOABalAUCML)), 
              data.frame(method="cos", auc=L1KMOABalAUCCos, cell=names(L1KMOABalAUCCos))),
@@ -390,6 +412,9 @@ ggplot(rbind(L1KMoABalFDRCos, L1KMoABalFDRML), aes(x=cell, y=fdr05, fill=method)
   ylab("Balanced FDR < 0.05") + ggtitle("L1K MoA Balanced FDR < 0.05") + ylim(c(0, 0.5)) + 
   theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1))
 dev.off()
+
+
+
 
 
 

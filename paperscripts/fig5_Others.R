@@ -52,6 +52,17 @@ if (!file.exists(file.path(outdir, "../figspaper_res", "eigenvaluedata.rds"))){
   attach(eigendata)
 }
 
+# Load the eigendata for brayds
+if (!file.exists(file.path(outdir, "../figspaper_res", "eigendataBray.rds"))){
+  braydir <- file.path(cpdir, "bray/models")
+
+  brayds <- loadBrayData(braypath)
+  
+  braymodel <- torch::torch_load(file.path(braydir, "braymetric_epch=10_smp=50_model.pt"))
+  
+} else {
+  eigenBray <- readRDS(file.path(outdir, "../figspaper_res", "eigendataBray.rds"))
+}
 
 #### Get hallmark variance - a supervised approach to a biological interpretation of changes in the gene space 
 # hmarks loaded in figinit
@@ -205,6 +216,21 @@ for (mycell in eigencells){
   
 }
 
+
+#### Gini coefficients of eigenvalues
+
+if (!file.exists(file.path(outdir, "../figspaper_res", "eigendataGini.rds"))){
+  baseVar <- sapply(eigendata, FUN=function(x) x$pctvarBase)
+  MLVar <- sapply(eigendata, FUN=function(x) x$pctvarML)
+  
+  giniCoefs <- rbind(data.frame(ds="ML", gini=sapply(seq(14), FUN=function(x) Gini(MLVar[1:200,x])), cellid=names(eigendata)),
+                     data.frame(ds="base", gini=sapply(seq(14), FUN=function(x) Gini(baseVar[1:200,x])), cellid=names(eigendata)))
+  saveRDS(giniCoefs, file.path(outdir, "../figspaper_res", "eigendataGini.rds"))
+} else {
+  giniCoefs <- readRDS(file.path(outdir, "../figspaper_res", "eigendataGini.rds"))
+}
+
+
 # Ghetto plots
 pdf(file.path(outdir, "fig5_eigenvalueDistributionFigures.pdf"), width=8, height=6)
 plot(-100, -100, xlim=c(0, 978), ylim=c(-5, 0), xlab="Eigenvalue index", ylab="Percent Variance explained", main="Eigenvalues of L1000 data distribution")
@@ -230,6 +256,10 @@ dev.off()
 
 
 pcdf <- data.frame(cellid=names(eigendata), 
+                   pc25=c(sapply(eigendata, FUN=function(x) min(which(cumsum(x$pcBase$sdev^2/sum(x$pcBase$sdev^2)) > 0.25))), 
+                          sapply(eigendata, FUN=function(x) min(which(cumsum(x$pcML$sdev^2/sum(x$pcML$sdev^2)) > 0.25)))), 
+                   pc50=c(sapply(eigendata, FUN=function(x) min(which(cumsum(x$pcBase$sdev^2/sum(x$pcBase$sdev^2)) > 0.50))), 
+                          sapply(eigendata, FUN=function(x) min(which(cumsum(x$pcML$sdev^2/sum(x$pcML$sdev^2)) > 0.50)))), 
                    pc95=c(sapply(eigendata, FUN=function(x) min(which(cumsum(x$pcBase$sdev^2/sum(x$pcBase$sdev^2)) > 0.95))), 
                           sapply(eigendata, FUN=function(x) min(which(cumsum(x$pcML$sdev^2/sum(x$pcML$sdev^2)) > 0.95)))), 
                    pc5e3=c(sapply(eigendata, FUN=function(x) sum((x$pcBase$sdev^2/sum(x$pcBase$sdev^2) > 0.005))), 
@@ -238,8 +268,29 @@ pcdf <- data.frame(cellid=names(eigendata),
                            sapply(eigendata, FUN=function(x) sum((x$pcML$sdev^2/sum(x$pcML$sdev^2) > 0.01)))),
                    space=c(rep("Base", 14), rep("ML", 14)))
 
-ggplot(pcdf, aes(x=cellid, y=pc95, fill=space)) + geom_bar(stat="identity", position="dodge") + theme_minimal() + ggtitle("Number of PCs needed to account for 95% of variance")
-ggplot(pcdf, aes(x=cellid, y=pc5e3, fill=space)) + geom_bar(stat="identity", position="dodge") + theme_minimal() + ggtitle("Number of PCs with at least 0.5% of variance")
+
+pdf(file.path(outdir, "fig5_eigenvaluePlots2.pdf"), width=8, height=6)
+ggplot(pcdf, aes(x=cellid, y=pc95, fill=space)) + geom_bar(stat="identity", position="dodge") + 
+  theme_minimal() + ggtitle("Number of PCs needed to account for 95% of variance")
+ggplot(pcdf, aes(x=cellid, y=pc5e3, fill=space)) + geom_bar(stat="identity", position="dodge") + 
+  theme_minimal() + ggtitle("Number of PCs with at least 0.5% of variance")
+
+plot(-10, -10, xlim=c(0, 200), ylim=c(0,1), xlab="Eigenvalue index", ylab="Cumulative pct variance explained", main="Cumulative Percentage of Variance of L1000 data distribution")
+for (ii in seq_along(eigendata)){
+  lines(cumsum(eigendata[[ii]]$pctvarBase), col="blue", type="l", lwd=2)
+  lines(cumsum(eigendata[[ii]]$pctvarML), col="red", type="l", lwd=2)
+}
+legend(x="bottomright", legend=c("Base (cosine)", "Embedding (ML)"), col=c("blue", "red"), lwd=c(3,3))
+
+ggplot(giniCoefs, aes(x=ds, y=gini, fill=ds)) + geom_violin() + geom_jitter(width = 0.25) + theme_minimal() + 
+  xlab("Embedding") + ylab("Gini Coefficient") + ggtitle("Gini coefficients of first 200 eigenvalues, Wilcox p = 3.4e-4") + ylim(c(0.2, 0.8))
+
+
+ggplot(rbind(data.frame(space="ML", eigenvalue=as.numeric(MLVar)), 
+             data.frame(space="base (cosine)", eigenvalue=as.numeric(baseVar))), 
+       aes(x=eigenvalue, fill=space)) + geom_histogram(bins=200, alpha=0.8) + 
+      coord_cartesian(xlim=c(1e-10, 1)) + scale_x_continuous(trans="log10") + theme_minimal()
+dev.off()
 
 
 # Centering is inappropriate because we are taking inner products in the uncentered space. 
