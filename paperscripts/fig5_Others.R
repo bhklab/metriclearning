@@ -58,11 +58,45 @@ if (!file.exists(file.path(outdir, "../figspaper_res", "eigendataBray.rds"))){
 
   brayds <- loadBrayData(braypath)
   
+  # Bray PCA is going crazy because of a small number (< 1%) of crazy outliers. 
+  # It's unclear how much these would affect metric learning, as the loss function
+  # is insensitive under rescaling. For PCA, I am removing them from both base and 
+  # embedded computations because they contribute massively to the variance
+  
+  xsum <- rowSums(abs(brayds$ds))
+  jx <- which((xsum - mean(xsum))/sd(xsum) > 10)
+  
   braymodel <- torch::torch_load(file.path(braydir, "braymetric_epch=10_smp=50_model.pt"))
+  braymodelmat <- as.matrix(braymodel(torch_tensor(brayds$ds, dtype=torch_float())))
+  
+  ix <- sample(setdiff(seq(dim(brayds$ds)[1]), jx), 10000)
+  
+  # Normalize - project onto the unit ball 
+  baseMat <- brayds$ds[ix,]/sqrt(rowSums(brayds$ds[ix,]^2))
+  mlMat <- braymodelmat[ix,]/sqrt(rowSums(braymodelmat[ix,]^2))
+  
+  #system.time(pcBrayBase <- prcomp(brayds$ds[ix,], center=FALSE))  # The base space is already scaled
+  #system.time(pcBrayML <- prcomp(braymodelmat[ix,], center=FALSE))
+  
+  system.time(pcBrayBase <- prcomp(baseMat, center=FALSE))
+  system.time(pcBrayML <- prcomp(mlMat, center=FALSE))
+  
+  pctvarBaseBray <- pcBrayBase$sdev^2/sum(pcBrayBase$sdev^2)
+  pctvarMLBray <- pcBrayML$sdev^2/sum(pcBrayML$sdev^2)
+  
+  eigenBray <- list(pcBrayBase=pcBrayBase[c("sdev", "rotation")], 
+                    pcBrayML=pcBrayML[c("sdev", "rotation")], 
+                    pctvarBaseBray=pctvarBaseBray, 
+                    pctvarMLBray=pctvarMLBray, 
+                    sample_ix=ix)
+  saveRDS(eigenBray, file=file.path(outdir, "../figspaper_res", "eigendataBray.rds"))
   
 } else {
   eigenBray <- readRDS(file.path(outdir, "../figspaper_res", "eigendataBray.rds"))
 }
+
+eigenBraydf <- rbind(data.frame(dataset="base", pctVar=pctvarBaseBray, cumVar=cumsum(pctvarBaseBray), index=seq_along(pctvarBaseBray)), 
+                     data.frame(dataset="ML", pctVar=pctvarMLBray, cumVar=cumsum(pctvarMLBray), index=seq_along(pctvarMLBray)))
 
 #### Get hallmark variance - a supervised approach to a biological interpretation of changes in the gene space 
 # hmarks loaded in figinit
@@ -275,21 +309,32 @@ ggplot(pcdf, aes(x=cellid, y=pc95, fill=space)) + geom_bar(stat="identity", posi
 ggplot(pcdf, aes(x=cellid, y=pc5e3, fill=space)) + geom_bar(stat="identity", position="dodge") + 
   theme_minimal() + ggtitle("Number of PCs with at least 0.5% of variance")
 
-plot(-10, -10, xlim=c(0, 200), ylim=c(0,1), xlab="Eigenvalue index", ylab="Cumulative pct variance explained", main="Cumulative Percentage of Variance of L1000 data distribution")
-for (ii in seq_along(eigendata)){
-  lines(cumsum(eigendata[[ii]]$pctvarBase), col="blue", type="l", lwd=2)
-  lines(cumsum(eigendata[[ii]]$pctvarML), col="red", type="l", lwd=2)
-}
-legend(x="bottomright", legend=c("Base (cosine)", "Embedding (ML)"), col=c("blue", "red"), lwd=c(3,3))
+plot(-10, -10, xlim=c(0, 250), ylim=c(0,1), xlab="Eigenvalue index", ylab="Cumulative pct variance explained", main="Cumulative Percentage of Variance of L1000 data distribution")
+  for (ii in seq_along(eigendata)){
+    lines(cumsum(eigendata[[ii]]$pctvarBase), col="coral2", type="l", lwd=2)
+    lines(cumsum(eigendata[[ii]]$pctvarML), col="cyan4", type="l", lwd=2)
+  }
+  legend(x="bottomright", legend=c("Base (cosine)", "Embedding (ML)"), col=c("coral2", "cyan4"), lwd=c(3,3))
 
 ggplot(giniCoefs, aes(x=ds, y=gini, fill=ds)) + geom_violin() + geom_jitter(width = 0.25) + theme_minimal() + 
   xlab("Embedding") + ylab("Gini Coefficient") + ggtitle("Gini coefficients of first 200 eigenvalues, Wilcox p = 3.4e-4") + ylim(c(0.2, 0.8))
 
 
 ggplot(rbind(data.frame(space="ML", eigenvalue=as.numeric(MLVar)), 
-             data.frame(space="base (cosine)", eigenvalue=as.numeric(baseVar))), 
-       aes(x=eigenvalue, fill=space)) + geom_histogram(bins=200, alpha=0.8) + 
-      coord_cartesian(xlim=c(1e-10, 1)) + scale_x_continuous(trans="log10") + theme_minimal()
+             data.frame(space="base", eigenvalue=as.numeric(baseVar))), 
+       aes(x=eigenvalue, color=space, fill=space)) + geom_density(alpha=0.6) + 
+      coord_cartesian(xlim=c(1e-10, 1)) + scale_x_continuous(trans="log10") + theme_minimal() + 
+  xlab("Eigenvalue (pct variance)") + ylab("Density") + ggtitle("L1000 Eigenvalue distributions")
+dev.off()
+
+
+pdf(file.path(outdir, "fig5_CDRPEigenvaluePlots.pdf"), width=8, height=6)
+ggplot(eigenBraydf, aes(x=index, y=cumVar, color=dataset)) + geom_line(lwd=2) + coord_cartesian(xlim=c(0,100)) + theme_minimal() + 
+  xlab("Eigenvalue Index") + ylab("Cumulative pct variance explained") + ggtitle("CDRP Cell Painting Pct Variance explained")
+
+ggplot(eigenBraydf, aes(x=pctVar, color=dataset, fill=dataset)) + geom_density(alpha=0.4) + 
+  scale_x_continuous(trans="log10") + coord_cartesian(xlim=c(1e-12, 1)) + theme_minimal() + 
+  xlab("Eigenvalue (pct variance)") + ylab("Density") + ggtitle("CDRP Eigenvalue distributions")
 dev.off()
 
 

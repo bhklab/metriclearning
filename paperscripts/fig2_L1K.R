@@ -336,6 +336,20 @@ for (mycell in names(pclresAlt)) {
 }
 dev.off()
 
+
+combpcl <- rbind(L1KMoABalFDRML[,c(2, 4, 5)], L1KMoABalFDRCos[,c(2,4,5)])
+combpcl <- rbind(combpcl, data.frame(fdr05=as.numeric(altMoAfdr[6,2:13]), cell=colnames(altMoAfdr)[2:13], method="wtcs"))
+combpcl <- rbind(combpcl, data.frame(fdr05=as.numeric(altMoAfdr[7,2:13]), cell=colnames(altMoAfdr)[2:13], method="pearson"))
+combpcl <- rbind(combpcl, data.frame(fdr05=as.numeric(altMoAfdr[8,2:13]), cell=colnames(altMoAfdr)[2:13], method="spearman"))
+
+# Fix colors
+pdf(file.path(outdir, "Sfig_L1KMoAAltMetricRecallComparison.pdf"), width=10, height=6)
+ggplot(combpcl[!(combpcl$cell %in% c("HUVEC", "JURKAT", "NPC", "BT20")),], aes(x=cell, y=fdr05, fill=method)) + 
+  geom_bar(stat="identity", position="dodge") + theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1)) + xlab("Cell Line") + ylab("MoA Recall at FDR = 0.05") + 
+  ggtitle("Comparison of metrics on L1000: MoA Recall at FDR < 0.05") #+ scale_fill_manual(values)
+dev.off()
+
 #### Metric Learning MoA analysis ####
 pdf(file.path(outdir, "fig2e_L1KMoAMeanBalAUC.pdf"), width=8, height=6)
 ggplot(rbind(data.frame(method="ml", auc=L1KMOABalAUCML, cell=names(L1KMOABalAUCML)), 
