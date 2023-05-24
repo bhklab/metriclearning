@@ -347,7 +347,7 @@ pdf(file.path(outdir, "Sfig_L1KMoAAltMetricRecallComparison.pdf"), width=10, hei
 ggplot(combpcl[!(combpcl$cell %in% c("HUVEC", "JURKAT", "NPC", "BT20")),], aes(x=cell, y=fdr05, fill=method)) + 
   geom_bar(stat="identity", position="dodge") + theme_minimal() + 
   theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1)) + xlab("Cell Line") + ylab("MoA Recall at FDR = 0.05") + 
-  ggtitle("Comparison of metrics on L1000: MoA Recall at FDR < 0.05") #+ scale_fill_manual(values)
+  ggtitle("Comparison of metrics on L1000: MoA Recall at FDR < 0.05") #+ scale_fill_discrete(labels=c())
 dev.off()
 
 #### Metric Learning MoA analysis ####
