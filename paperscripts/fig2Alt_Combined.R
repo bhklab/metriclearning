@@ -377,3 +377,77 @@ ggplot(Mfdrdf, aes(x=value, y=dataset, color=method)) + geom_point(size=2) + the
 dev.off()
 
 
+
+### Balanced Sampling supplementals
+cpPairs <- sapply(xvalres, FUN=function(x) 
+  unlist(sapply(x$inProdReps, FUN=function(y) 
+    sapply(y$same, length))))
+cpBalPairs <- sapply(xvalres, FUN=function(x) 
+  unlist(sapply(x$inProdReps, FUN=function(y) 
+    sapply(balancedSample(y$same, k = 100), length))))
+
+cpBrayPairs <- unlist(sapply(cpxvalres[[2]]$inProdReps, FUN=function(y) unlist(sapply(y$same, length))))
+cpBrayBalPairs <- unlist(sapply(cpxvalres[[2]]$inProdReps, FUN=function(y) unlist(sapply(balancedSample(y$same), length))))
+
+cpPairs[["CDRP"]] <- cpBrayPairs
+cpBalPairs[["CDRP"]] <- cpBrayBalPairs
+
+# Gross, but needed for a ggplot
+ggcpPairs <- data.frame(cellid=character(), cpcounts=numeric(), cumcounts=numeric(), ix=numeric())
+ggcpBalPairs <- data.frame(cellid=character(), cpcounts=numeric(), cumcounts=numeric(), ix=numeric())
+for (ii in seq_along(cpPairs)){
+  ggcpPairs <- rbind(ggcpPairs, data.frame(cellid=names(cpPairs)[ii], 
+                                           cpcounts=cpPairs[[ii]],
+                                           cumfrac=cumsum(sort(cpPairs[[ii]], decreasing=TRUE))/sum(cpPairs[[ii]]),
+                                           ix=seq_along(cpPairs[[ii]])/length(cpPairs[[ii]])))
+  ggcpBalPairs <- rbind(ggcpBalPairs, data.frame(cellid=names(cpBalPairs)[ii], 
+                                                 cpcounts=cpBalPairs[[ii]],
+                                                 cumfrac=cumsum(sort(cpBalPairs[[ii]], decreasing=TRUE))/sum(cpBalPairs[[ii]]),
+                                                 ix=seq_along(cpBalPairs[[ii]])/length(cpBalPairs[[ii]])))
+}
+
+
+mycols <- rainbow(13)
+
+# Replicate bAUC figures
+g1 <- ggplot(ggcpPairs, aes(x=ix, y=cumfrac, color=cellid)) + geom_line(linewidth=1) + theme_minimal() + 
+  xlab("Fraction of compounds") + ylab("Cumulative Fraction of Pairs")  + theme(legend.position="right") + 
+  ggtitle("Raw counts")
+g2 <- ggplot(ggcpBalPairs, aes(x=ix, y=cumfrac, color=cellid)) + geom_line(linewidth=1) + theme_minimal() + 
+  xlab("Fraction of compounds") + ylab("Cumulative Fraction of Pairs")  + theme(legend.position="right") + 
+  ggtitle("Balanced sampling")
+
+pdf(file=file.path(outdir, "Sfig_L1K_balAUROCgg.pdf"), width=10, height=5)
+plot_grid(g1, g2, labels="AUTO")
+dev.off()
+
+
+colPairAUC <- data.frame()
+for (ii in seq_along(cpPairs)){
+  AUC <- mean(cumsum(sort(cpPairs[[ii]], decreasing=TRUE))/sum(cpPairs[[ii]]))
+  balAUC <- mean(cumsum(sort(cpBalPairs[[ii]], decreasing=TRUE))/sum(cpBalPairs[[ii]]))
+  
+  N50 <- min(which(cumsum(sort(cpPairs[[ii]], decreasing=TRUE))/sum(cpPairs[[ii]]) > 0.5))
+  balN50 <- min(which(cumsum(sort(cpBalPairs[[ii]], decreasing=TRUE))/sum(cpBalPairs[[ii]]) > 0.5))
+  
+  colPairAUC <- rbind(colPairAUC, data.frame(cell_id =names(cpPairs)[[ii]], AUC=AUC, balAUC=balAUC, N50=N50, balN50=balN50))
+}
+
+colPairAUC$Total <- sapply(cpPairs, length)
+colPairAUC <- colPairAUC[c(order(colPairAUC$cell_id[1:13]), 14),]
+
+# Replicate bAUC table; Handle precision
+pdf(file=file.path(outdir, "STab_L1K_balAUROC.pdf"), width=4, height=6)
+grid.table(tibble(colPairAUC %>% mutate_if(is.numeric, ~ round(.,3))), rows = NULL)
+dev.off()
+
+
+# Balanced Sampling moA
+moaPairs <- sapply(L1KPCLRes$pclres, FUN=function(x) 
+  unlist(sapply(x$mlPCLs, FUN=function(y) 
+    sapply(y$setSims, length))))
+moaBalPairs <- sapply(L1KPCLRes$pclres, FUN=function(x) 
+  unlist(sapply(x$mlPCLs, FUN=function(y) 
+    sapply(balancedSample(y$setSims, k=1000), length))))
+
+

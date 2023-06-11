@@ -1,6 +1,6 @@
 source("paperscripts/figinit.R")
 
-
+library(DescTools)
 
 
 #### Figure 5: Biological Interpretation
@@ -264,8 +264,12 @@ if (!file.exists(file.path(outdir, "../figspaper_res", "eigendataGini.rds"))){
   baseVar <- sapply(eigendata, FUN=function(x) x$pctvarBase)
   MLVar <- sapply(eigendata, FUN=function(x) x$pctvarML)
   
-  giniCoefs <- rbind(data.frame(ds="ML", gini=sapply(seq(14), FUN=function(x) Gini(MLVar[1:200,x])), cellid=names(eigendata)),
-                     data.frame(ds="base", gini=sapply(seq(14), FUN=function(x) Gini(baseVar[1:200,x])), cellid=names(eigendata)))
+  giniCoefs <- rbind(data.frame(ds="L1000 ML", gini=sapply(seq(14), FUN=function(x) Gini(MLVar[1:200,x])), cellid=names(eigendata)),
+                     data.frame(ds="L1000 base", gini=sapply(seq(14), FUN=function(x) Gini(baseVar[1:200,x])), cellid=names(eigendata)),
+                     data.frame(ds="CDRP ML", gini=Gini(eigenBray$pctvarMLBray[1:100]), cellid="CDRP"), 
+                     data.frame(ds="CDRP base", gini=Gini(eigenBray$pctvarBaseBray[1:100]), cellid="CDRP"))
+  
+  
   saveRDS(giniCoefs, file.path(outdir, "../figspaper_res", "eigendataGini.rds"))
 } else {
   giniCoefs <- readRDS(file.path(outdir, "../figspaper_res", "eigendataGini.rds"))
@@ -296,6 +300,19 @@ legend(x="bottomright", legend=c("Base (cosine)", "Embedding (ML)"), col=c("blue
 dev.off()
 
 
+# GGplot version of the cumulative variance distribution. 
+eigendf <- data.frame(cellid=character(), dataset=character(), x=numeric(), cumpctvar=numeric())
+for (ii in seq_along(eigendata)){
+  eigendf <- rbind(eigendf, data.frame(cellid=names(eigendata)[ii], x=seq(978), dataset="base", cumpctvar=cumsum(eigendata[[ii]]$pctvarBase)))
+  eigendf <- rbind(eigendf, data.frame(cellid=names(eigendata)[ii], x=seq(978), dataset="ML", cumpctvar=cumsum(eigendata[[ii]]$pctvarML)))
+}
+
+pdf(file.path(outdir, "fig5_eigenvalueDistributionFiguresGGP.pdf"), width=8, height=6)
+ggplot(eigendf, aes(x=x, y=cumpctvar, color=dataset, lty=cellid)) + geom_line(lwd=1) + theme_minimal() + 
+  coord_cartesian(xlim=c(0, 250)) + xlab("Eigenvalue Index") + ylab("Cumulative percent variance") + ggtitle("L1000 Pct Variance")
+dev.off()
+
+
 pcdf <- data.frame(cellid=names(eigendata), 
                    pc25=c(sapply(eigendata, FUN=function(x) min(which(cumsum(x$pcBase$sdev^2/sum(x$pcBase$sdev^2)) > 0.25))), 
                           sapply(eigendata, FUN=function(x) min(which(cumsum(x$pcML$sdev^2/sum(x$pcML$sdev^2)) > 0.25)))), 
@@ -323,8 +340,10 @@ plot(-10, -10, xlim=c(0, 250), ylim=c(0,1), xlab="Eigenvalue index", ylab="Cumul
   }
   legend(x="bottomright", legend=c("Base (cosine)", "Embedding (ML)"), col=c("coral2", "cyan4"), lwd=c(3,3))
 
-ggplot(giniCoefs, aes(x=ds, y=gini, fill=ds)) + geom_violin() + geom_jitter(width = 0.25) + theme_minimal() + 
-  xlab("Embedding") + ylab("Gini Coefficient") + ggtitle("Gini coefficients of first 200 eigenvalues, Wilcox p = 3.4e-4") + ylim(c(0.2, 0.8))
+ggplot(giniCoefs, aes(x=factor(ds, levels=c("L1000 base", "L1000 ML", "CDRP base", "CDRP ML")), y=gini)) + 
+         geom_violin(aes(fill=giniCoefs$ds)) + geom_jitter(width = 0.25) + theme_minimal() + 
+  xlab("Embedding") + ylab("Gini Coefficient") + ggtitle("Gini coefficients of leading eigenvalues, Wilcox p = 3.4e-3") + 
+  ylim(c(0.4, 1)) + theme(legend.position="none")
 
 
 ggplot(rbind(data.frame(space="ML", eigenvalue=as.numeric(MLVar)), 
@@ -342,6 +361,13 @@ ggplot(eigenBraydf, aes(x=index, y=cumVar, color=dataset)) + geom_line(lwd=2) + 
 ggplot(eigenBraydf, aes(x=pctVar, color=dataset, fill=dataset)) + geom_density(alpha=0.4) + 
   scale_x_continuous(trans="log10") + coord_cartesian(xlim=c(1e-12, 1)) + theme_minimal() + 
   xlab("Eigenvalue (pct variance)") + ylab("Density") + ggtitle("CDRP Eigenvalue distributions")
+dev.off()
+
+pdf(file.path(outdir, "Sfig_ginicoefs.pdf"), width=8, height=6)
+ggplot(giniCoefs, aes(x=factor(ds, levels=c("L1000 base", "L1000 ML", "CDRP base", "CDRP ML")), y=gini)) + 
+  geom_violin(aes(fill=giniCoefs$ds)) + geom_jitter(width = 0.25, size=3) + theme_minimal() + 
+  xlab("Embedding") + ylab("Gini Coefficient") + ggtitle("Gini coefficients of leading eigenvalues, Wilcox p = 1.7e-3") + 
+  ylim(c(0.4, 1)) + theme(legend.position="none")
 dev.off()
 
 

@@ -325,14 +325,14 @@ altMoAfdr <- data.frame(rbind(cbind(fdr=0.01, sapply(pclresAlt, FUN=function(myc
 pdf(file.path(outdir, "Sfig_L1KMoAAltMetricFDRcomparison.pdf"), width=8, height=6)
 for (mycell in names(pclresAlt)) {
   print(mycell)
-  plot(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$cosRanks, k=1000)), method="fdr"))), col="cyan", ylab="Fraction", 
-       xlab="FDR", main=sprintf("%s Metric FDR CDF comparison", mycell), xlim=c(0,1))
-  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$wtcsRanks, k=1000)), method="fdr"))), col="orange")
-  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$pearsonRanks, k=1000)), method="fdr"))), col="purple")
-  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$spearRanks, k=1000)), method="fdr"))), col="forestgreen")
-  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclres[[mycell]]$mlRanks, k=1000)), method="fdr"))), col="black")
+  plot(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$cosRanks, k=1000)), method="fdr"))), col="#F8766D", ylab="Fraction", 
+       xlab="FDR", main=sprintf("%s Metric FDR CDF comparison", mycell), xlim=c(0,1), lwd=2)
+  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$wtcsRanks, k=1000)), method="fdr"))), col=cbbPalette[7], lwd=2)
+  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$pearsonRanks, k=1000)), method="fdr"))), col=cbbPalette[2], lwd=2)
+  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclresAlt[[mycell]]$spearRanks, k=1000)), method="fdr"))), col=cbbPalette[4], lwd=2)
+  lines(ecdf(sort(p.adjust(unlist(balancedSample(pclres[[mycell]]$mlRanks, k=1000)), method="fdr"))), col="#00BFC4", lwd=2)
   legend(x="bottomright", legend=c("Metric Learning", "Cosine", "Pearson", "Spearman", "WTCS"), 
-         col=c("black", "cyan", "purple", "forestgreen", "orange"), lwd=2)
+         col=c("#00BFC4", "#F8766D", cbbPalette[c(2,4,7)]), lwd=5)
 }
 dev.off()
 
@@ -343,11 +343,11 @@ combpcl <- rbind(combpcl, data.frame(fdr05=as.numeric(altMoAfdr[7,2:13]), cell=c
 combpcl <- rbind(combpcl, data.frame(fdr05=as.numeric(altMoAfdr[8,2:13]), cell=colnames(altMoAfdr)[2:13], method="spearman"))
 
 # Fix colors
-pdf(file.path(outdir, "Sfig_L1KMoAAltMetricRecallComparison.pdf"), width=10, height=6)
+pdf(file.path(outdir, "Sfig_L1KMoAAltMetricRecallComparison.pdf"), width=8, height=6)
 ggplot(combpcl[!(combpcl$cell %in% c("HUVEC", "JURKAT", "NPC", "BT20")),], aes(x=cell, y=fdr05, fill=method)) + 
   geom_bar(stat="identity", position="dodge") + theme_minimal() + 
   theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1)) + xlab("Cell Line") + ylab("MoA Recall at FDR = 0.05") + 
-  ggtitle("Comparison of metrics on L1000: MoA Recall at FDR < 0.05") #+ scale_fill_discrete(labels=c())
+  ggtitle("Comparison of metrics on L1000: MoA Recall at FDR < 0.05") + scale_fill_manual(values=c("#F8766D", "#00BFC4", cbbPalette[c(2,4,7)]))
 dev.off()
 
 #### Metric Learning MoA analysis ####
@@ -475,40 +475,6 @@ ggplot(l1kCountsTop, aes(fill=cellLine, y=signatures, x=1)) + geom_bar(stat="ide
 dev.off()
 
 
-# xvalres <- readRDS(file.path(outdir, "../figspaper_res/L1K_xvalres.rds"))
-
-cpPairs <- sapply(xvalres, FUN=function(x) 
-                unlist(sapply(x$inProdReps, FUN=function(y) 
-                  sapply(y$same, length))))
-cpBalPairs <- sapply(xvalres, FUN=function(x) 
-                unlist(sapply(x$inProdReps, FUN=function(y) 
-                  sapply(balancedSample(y$same, k = 100), length))))
-
-mycols <- rainbow(13)
-
-pdf(file=file.path(outdir, "Sfig_L1K_balAUROC.pdf"), width=8, height=6)
-plot(-100, -100, xlim=c(0,1), ylim=c(0,1), xlab="Fraction of Compounds", ylab="Cumulative Pairs", main="Cumulative distribution of pair counts for L1000 compounds")
-for (ii in seq(13)){
-  lines(seq(0,1,1/(length(cpPairs[[ii]])-1)), cumsum(sort(cpPairs[[ii]], decreasing=TRUE))/sum(cpPairs[[ii]]), col=mycols[[ii]], type="l")
-  lines(seq(0,1,1/(length(cpBalPairs[[ii]])-1)), cumsum(sort(cpBalPairs[[ii]], decreasing=TRUE))/sum(cpBalPairs[[ii]]), col=mycols[[ii]], type="l", lty=5)
-}
-legend(x="bottomright", legend=names(cpPairs), col=mycols, lwd=2)
-legend(x="bottom", legend=c("all Pairs", "balanced Sample"), lwd=2, lty=c(1,5))
-grid()
-dev.off()
-
-colPairAUC <- data.frame()
-for (ii in seq(13)){
-  allAUC <- mean(cumsum(sort(cpPairs[[ii]], decreasing=TRUE))/sum(cpPairs[[ii]]))
-  balAUC <- mean(cumsum(sort(cpBalPairs[[ii]], decreasing=TRUE))/sum(cpBalPairs[[ii]]))
-  
-  all50pct <- min(which(cumsum(sort(cpPairs[[ii]], decreasing=TRUE))/sum(cpPairs[[ii]]) > 0.5))
-  bal50pct <- min(which(cumsum(sort(cpBalPairs[[ii]], decreasing=TRUE))/sum(cpBalPairs[[ii]]) > 0.5))
-  
-  colPairAUC <- rbind(colPairAUC, data.frame(cell_id =names(cpPairs)[[ii]], allAUC=allAUC, balAUC=balAUC, all50pct=all50pct, bal50pct=bal50pct))
-}
 
 
-pdf(file=file.path(outdir, "STab_L1K_balAUROC.pdf"), width=5, height=6)
-grid.table(tibble(colPairAUC), rows = NULL)
-dev.off()
+
