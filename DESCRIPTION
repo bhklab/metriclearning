@@ -1,0 +1,20 @@
+Package: metriclearning
+Title: Analysis of Metasignatures on Perturbational Data
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Ian", "Smith", email="ianc.smith@mail.utoronto.ca", role=c("aut"), comment=c(ORCID="0000-0003-3957-4397")),
+    person("Benjamin", "Haibe-Kains", email="benjamin.haibe.kains@utoronto.ca", role=c("aut", "cre"))
+    )
+Description: This package contains code used for metric learning as described in "Similarity metric learning on perturbational datasets improves functional identification of perturbation"
+License: GPL (>= 3)
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+Imports: 
+    cmapR,
+    coop,
+    ggplot2,
+    MASS,
+    perturbKit,
+    stats, 
+    moments
